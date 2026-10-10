@@ -2,6 +2,8 @@
 
 Digital versjon av A-Puzzle-A-Day (DragonFjord).
 
+Spill live-versjonen her: https://hausnes.github.io/a-puzzle-a-day
+
 A‑Puzzle‑A‑Day Deluxe er et kalenderutfordrings‑puslespill der åtte trebiter skal plasseres i en ramme slik at én måned og én dag vises.
 
 ## Slik spiller du
@@ -15,6 +17,14 @@ Legg alle de åtte brikkene på brettet slik at bare **dagens måned og dato** e
 | Speilvende | Høyreklikk eller Shift+klikk, eller `F` mens du drar | `F` |
 | Avbryte | `Esc` mens du drar | `Esc` |
 | Sende brikka tilbake | Slipp den utenfor brettet | `Delete` |
+
+### Hint
+
+Står du fast, kan du trykke **💡 Hint** for å få hjelp til å legge én brikke, maks tre ganger per dag.
+Hintet tar utgangspunkt i brikkene du allerede har lagt, og bruker den løsningen som beholder flest av dem.
+Ligger noen brikker slik at oppgaven ikke kan løses, flyttes de, og hintet viser hvor en av dem skal ligge.
+Brikker lagt med hint får en 💡, og når oppgaven er løst, står det hvor mange hint du brukte.
+«Start på nytt» nullstiller ikke hint-telleren.
 
 Fremgangen lagres i nettleseren per dag. For å teste en annen dato kan du legge til `?dato=2026-12-24` i adressen.
 

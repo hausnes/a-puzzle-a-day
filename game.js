@@ -16,14 +16,14 @@
 
   // ---------- Brikkene (fra bildet) ----------
   const PIECE_DEFS = [
-    { id: 'V', name: 'V-brikke', color: '#9a6a3e', grain: 'h', cells: [[0, 0], [1, 0], [2, 0], [0, 1], [0, 2]] },
-    { id: 'L', name: 'L-brikke', color: '#4f3526', grain: 'h', cells: [[0, 0], [0, 1], [0, 2], [0, 3], [1, 3]] },
-    { id: 'O', name: 'rektangel', color: '#6e4d3a', grain: 'h', cells: [[0, 0], [1, 0], [0, 1], [1, 1], [0, 2], [1, 2]] },
-    { id: 'N', name: 'N-brikke', color: '#b39283', grain: 'v', cells: [[1, 0], [1, 1], [0, 1], [0, 2], [0, 3]] },
-    { id: 'Y', name: 'Y-brikke', color: '#7a5034', grain: 'v', cells: [[0, 0], [0, 1], [0, 2], [0, 3], [1, 1]] },
-    { id: 'Z', name: 'Z-brikke', color: '#3f2c22', grain: 'h', cells: [[1, 0], [2, 0], [1, 1], [0, 2], [1, 2]] },
-    { id: 'U', name: 'U-brikke', color: '#8c6a5c', grain: 'h', cells: [[0, 0], [2, 0], [0, 1], [1, 1], [2, 1]] },
-    { id: 'P', name: 'P-brikke', color: '#5f3f2e', grain: 'v', cells: [[1, 0], [0, 1], [1, 1], [0, 2], [1, 2]] },
+    { id: 'V', name: 'V-brikke', the: 'V-brikken', color: '#9a6a3e', grain: 'h', cells: [[0, 0], [1, 0], [2, 0], [0, 1], [0, 2]] },
+    { id: 'L', name: 'L-brikke', the: 'L-brikken', color: '#4f3526', grain: 'h', cells: [[0, 0], [0, 1], [0, 2], [0, 3], [1, 3]] },
+    { id: 'O', name: 'rektangel', the: 'rektangelet', color: '#6e4d3a', grain: 'h', cells: [[0, 0], [1, 0], [0, 1], [1, 1], [0, 2], [1, 2]] },
+    { id: 'N', name: 'N-brikke', the: 'N-brikken', color: '#b39283', grain: 'v', cells: [[1, 0], [1, 1], [0, 1], [0, 2], [0, 3]] },
+    { id: 'Y', name: 'Y-brikke', the: 'Y-brikken', color: '#7a5034', grain: 'v', cells: [[0, 0], [0, 1], [0, 2], [0, 3], [1, 1]] },
+    { id: 'Z', name: 'Z-brikke', the: 'Z-brikken', color: '#3f2c22', grain: 'h', cells: [[1, 0], [2, 0], [1, 1], [0, 2], [1, 2]] },
+    { id: 'U', name: 'U-brikke', the: 'U-brikken', color: '#8c6a5c', grain: 'h', cells: [[0, 0], [2, 0], [0, 1], [1, 1], [2, 1]] },
+    { id: 'P', name: 'P-brikke', the: 'P-brikken', color: '#5f3f2e', grain: 'v', cells: [[1, 0], [0, 1], [1, 1], [0, 2], [1, 2]] },
   ];
 
   // Orientering: speilvend først (x → -x), deretter roter `rot` ganger 90° med klokka.
@@ -70,6 +70,9 @@
   const pieces = PIECE_DEFS.map((def, i) => ({ ...def, index: i, orient: { rot: 0, flip: false }, board: null, z: i }));
   let startedAt = null;
   let solvedAt = null;
+  const MAX_HINTS = 3;
+  let hintsUsed = 0;    // teller for hele dagen – nullstilles ikke av «Start på nytt»
+  let solvedHints = 0;  // antall hint brukt da oppgaven ble løst
   let selected = null;
   let drag = null;   // musedraing som pågår
   let kbd = null;    // tastaturflytting som pågår
@@ -91,22 +94,75 @@
     });
   }
 
+  const isGoal = c => (c.kind === 'month' && c.value === date.month) || (c.kind === 'day' && c.value === date.day);
+
+  // Rutene en brikke dekker på brettet, som en sammenlignbar streng (null hvis den ikke ligger på brettet).
+  const placedKey = (cells, bx, by) => cells.map(([x, y]) => key(bx + x, by + y)).sort().join(' ');
+  const pieceKey = p => (p.board ? placedKey(cellsOf(p), p.board.x, p.board.y) : null);
+
+  // ---------- Løser (for hint) ----------
+  // Finner alle løsninger for dagens dato. Tar under et halvt sekund, og gjøres bare én gang per dag.
+  let solutionCache = { key: null, list: [] };
+
+  function allSolutions() {
+    if (solutionCache.key === date.key) return solutionCache.list;
+    const orients = pieces.map(p => {
+      const unique = new Map();
+      for (const flip of [false, true]) {
+        for (let rot = 0; rot < 4; rot++) {
+          const orient = { rot, flip };
+          const cells = transform(p.cells, orient);
+          const id = placedKey(cells, 0, 0);
+          // Ankeret er brikkens første rute lest rad for rad – den må dekke første ledige rute.
+          const anchor = cells.reduce((a, c) => (c[1] < a[1] || (c[1] === a[1] && c[0] < a[0]) ? c : a));
+          if (!unique.has(id)) unique.set(id, { orient, cells, anchor });
+        }
+      }
+      return [...unique.values()];
+    });
+    const open = BOARD.filter(c => !isGoal(c)).sort((a, b) => a.y - b.y || a.x - b.x);
+    const free = new Set(open.map(c => key(c.x, c.y)));
+    const used = pieces.map(() => null);
+    const list = [];
+    (function search() {
+      const target = open.find(c => free.has(key(c.x, c.y)));
+      if (!target) { list.push(used.slice()); return; }
+      pieces.forEach((p, i) => {
+        if (used[i]) return;
+        for (const o of orients[i]) {
+          const bx = target.x - o.anchor[0], by = target.y - o.anchor[1];
+          const ks = o.cells.map(([x, y]) => key(bx + x, by + y));
+          if (!ks.every(k => free.has(k))) continue;
+          ks.forEach(k => free.delete(k));
+          used[i] = { orient: o.orient, board: { x: bx, y: by }, cellsKey: ks.slice().sort().join(' ') };
+          search();
+          used[i] = null;
+          ks.forEach(k => free.add(k));
+        }
+      });
+    })();
+    solutionCache = { key: date.key, list };
+    return list;
+  }
+
   // ---------- Lagring (per dag) ----------
   const storageKey = () => 'apad:v1:' + date.key;
 
   function save() {
     try {
       localStorage.setItem(storageKey(), JSON.stringify({
-        pieces: pieces.map(p => ({ id: p.id, orient: p.orient, board: p.board })),
-        startedAt, solvedAt,
+        pieces: pieces.map(p => ({ id: p.id, orient: p.orient, board: p.board, hintKey: p.hintKey })),
+        startedAt, solvedAt, hintsUsed, solvedHints,
       }));
     } catch { /* lagring er bare en bonus */ }
   }
 
   function load() {
-    pieces.forEach(p => { p.orient = { rot: 0, flip: false }; p.board = null; });
+    pieces.forEach(p => { p.orient = { rot: 0, flip: false }; p.board = null; p.hintKey = null; });
     startedAt = null;
     solvedAt = null;
+    hintsUsed = 0;
+    solvedHints = 0;
     try {
       const data = JSON.parse(localStorage.getItem(storageKey()));
       if (!data) return;
@@ -116,9 +172,12 @@
         p.orient = { rot: (saved.orient.rot | 0) % 4, flip: !!saved.orient.flip };
         p.board = null;
         if (saved.board && canPlace(p, p.orient, saved.board.x, saved.board.y)) p.board = saved.board;
+        p.hintKey = saved.hintKey || null;
       }
       startedAt = data.startedAt || null;
       solvedAt = data.solvedAt || null;
+      hintsUsed = Math.min(MAX_HINTS, data.hintsUsed | 0);
+      solvedHints = data.solvedHints | 0;
     } catch { /* ignorer ødelagt lagring */ }
   }
 
@@ -183,7 +242,7 @@
     el.addEventListener('contextmenu', e => onContextMenu(e, p));
     el.addEventListener('keydown', e => onPieceKey(e, p));
     el.addEventListener('focus', () => select(p));
-    el.addEventListener('animationend', () => el.classList.remove('shake'));
+    el.addEventListener('animationend', () => el.classList.remove('shake', 'flash-in', 'flash-out'));
     // Hindrer at siden scroller når du drar en brikke på mobil.
     el.addEventListener('touchstart', e => { if (e.target.closest('.hit')) e.preventDefault(); }, { passive: false });
     playfield.appendChild(el);
@@ -249,7 +308,16 @@
       if (!set.has(key(x + 1, y))) edges += `M${x + 1} ${y}V${y + 1}`;
     });
     return `<svg width="${w * layout.u}" height="${h * layout.u}" viewBox="0 0 ${w} ${h}">` +
-      fill + grain + `<path class="edge" d="${edges}"/>` + hit + '</svg>';
+      fill + grain + `<path class="edge" d="${edges}"/>` + hintBadge(p, cells) + hit + '</svg>';
+  }
+
+  // Brikker som ligger der et hint la dem, får en liten lyspære.
+  const hasBadge = p => !!p.hintKey && p.hintKey === pieceKey(p);
+
+  function hintBadge(p, cells) {
+    if (!hasBadge(p)) return '';
+    const [x, y] = cells[centerCell(p)];
+    return `<text class="badge" x="${x + 0.5}" y="${y + 0.5}">💡</text>`;
   }
 
   function render() {
@@ -267,12 +335,11 @@
     });
 
     for (const c of BOARD) {
-      const goal = (c.kind === 'month' && c.value === date.month) || (c.kind === 'day' && c.value === date.day);
-      cellEls.get(c).classList.toggle('goal', goal);
+      cellEls.get(c).classList.toggle('goal', isGoal(c));
     }
 
     for (const p of pieces) {
-      const svgKey = `${p.orient.rot}${p.orient.flip}${u}`;
+      const svgKey = `${p.orient.rot}${p.orient.flip}${u}${hasBadge(p)}`;
       if (p.svgKey !== svgKey) {
         p.el.innerHTML = pieceSvg(p);
         p.svgKey = svgKey;
@@ -286,6 +353,8 @@
       p.el.classList.toggle('kbd', !!(kbd && kbd.p === p));
       p.el.classList.toggle('invalid', !!(kbd && kbd.p === p && !canPlace(p, p.orient, kbd.x, kbd.y)));
     }
+    hintBtn.textContent = `💡 Hint (${MAX_HINTS - hintsUsed} igjen)`;
+    hintBtn.disabled = hintsUsed >= MAX_HINTS || !!solvedAt;
     renderGhost();
   }
 
@@ -384,9 +453,10 @@
 
   function reset() {
     if (pieces.some(p => p.board) && !confirm('Vil du fjerne alle brikkene fra brettet og starte på nytt?')) return;
-    pieces.forEach(p => { p.board = null; p.orient = { rot: 0, flip: false }; });
+    pieces.forEach(p => { p.board = null; p.orient = { rot: 0, flip: false }; p.hintKey = null; });
     startedAt = null;
     solvedAt = null;
+    solvedHints = 0;
     drag = kbd = null;
     commit();
   }
@@ -568,6 +638,67 @@
     else if (k === 'f') { e.preventDefault(); turn(target, 'flip'); }
   });
 
+  // ---------- Hint ----------
+  const hintBtn = $('btn-hint');
+  const cap = s => s[0].toUpperCase() + s.slice(1);
+  const list = names => names.length > 1 ? names.slice(0, -1).join(', ') + ' og ' + names[names.length - 1] : names[0];
+
+  function flash(p, cls) {
+    p.el.classList.remove('flash-in', 'flash-out');
+    void p.el.offsetWidth;
+    p.el.classList.add(cls);
+  }
+
+  // Velger løsningen som beholder flest mulig av brikkene du har lagt selv.
+  // Brikker som ikke passer inn i den løsningen, sendes tilbake, og én brikke legges riktig.
+  function hint() {
+    if (hintsUsed >= MAX_HINTS || solvedAt || drag) return;
+    if (kbd) cancelKbd();
+
+    const placed = pieces.filter(p => p.board);
+    let best = [], bestScore = -1;
+    for (const sol of allSolutions()) {
+      const score = placed.filter(p => sol[p.index].cellsKey === pieceKey(p)).length;
+      if (score > bestScore) { bestScore = score; best = [sol]; }
+      else if (score === bestScore) best.push(sol);
+    }
+    const sol = best[Math.floor(Math.random() * best.length)];
+    const wrong = placed.filter(p => sol[p.index].cellsKey !== pieceKey(p));
+    const missing = pieces.filter(p => !p.board);
+    // Lå noe feil, viser vi hvor en av de feilplasserte brikkene egentlig skal ligge.
+    const target = wrong[0] || missing[Math.floor(Math.random() * missing.length)];
+
+    for (const p of wrong) {
+      p.board = null;
+      p.hintKey = null;
+      if (p !== target) flash(p, 'flash-out');
+    }
+    target.orient = { ...sol[target.index].orient };
+    target.board = { ...sol[target.index].board };
+    target.hintKey = pieceKey(target);
+    bringToFront(target);
+    hintsUsed++;
+    startTimer();
+    selected = target;
+    commit();
+    flash(target, 'flash-in');
+
+    if (solvedAt) return; // hintet la siste brikke – gratulasjonen tar over
+    let msg = `Hint ${hintsUsed} av ${MAX_HINTS}: `;
+    if (wrong.length) {
+      msg += `${cap(target.the)} lå slik at puslespillet ikke kunne løses. Nå ligger den riktig.`;
+      const others = wrong.filter(p => p !== target);
+      if (others.length) {
+        msg += ` ${cap(list(others.map(p => p.the)))} måtte også flyttes og er lagt tilbake.`;
+      }
+    } else {
+      msg += `Her skal ${target.the} ligge.`;
+    }
+    say(msg);
+  }
+
+  hintBtn.addEventListener('click', hint);
+
   // ---------- Sjekk av løsning ----------
   function say(text, solved = false) {
     statusEl.textContent = text;
@@ -601,11 +732,12 @@
     }
     if (!solvedAt) {
       solvedAt = Date.now();
+      solvedHints = hintsUsed;
       if (!startedAt) startedAt = solvedAt;
       save();
       showWin();
     }
-    say(`Løst! Brettet viser ${date.short}. Tid: ${formatTime(solvedAt - startedAt)}.`, true);
+    say(`Løst! Brettet viser ${date.short}. Tid: ${formatTime(solvedAt - startedAt)}. ${helpText()}`, true);
   }
 
   // ---------- Gratulasjon ----------
@@ -613,10 +745,17 @@
 
   function showWin() {
     $('win-text').textContent =
-      `Du løste dagens puslespill for ${date.short} på ${formatTime(solvedAt - startedAt)}. Kom tilbake i morgen for en ny utfordring!`;
+      `Du løste dagens puslespill for ${date.short} på ${formatTime(solvedAt - startedAt)}.`;
+    $('win-help').textContent = helpText();
+    $('win-help').classList.toggle('unaided', solvedHints === 0);
     winEl.hidden = false;
     $('btn-close-win').focus();
     confetti();
+  }
+
+  function helpText() {
+    if (solvedHints === 0) return 'Helt uten hjelp! 🏆';
+    return `Du måtte få hjelp ${solvedHints} ${solvedHints === 1 ? 'gang' : 'ganger'}.`;
   }
 
   function hideWin() {

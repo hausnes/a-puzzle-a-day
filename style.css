@@ -46,7 +46,8 @@ button {
   color: var(--ink);
   cursor: pointer;
 }
-button:hover { background: #fff; }
+button:hover:not(:disabled) { background: #fff; }
+button:disabled { opacity: 0.5; cursor: default; }
 button:focus-visible { outline: 3px solid var(--select); outline-offset: 2px; }
 
 .timer {
@@ -141,6 +142,22 @@ main { padding: 0 16px 24px; }
 .piece.kbd.invalid { opacity: 0.75; }
 .piece.kbd.invalid .edge { stroke: var(--accent); stroke-width: 0.1; }
 
+.piece .badge {
+  font-size: 0.42px;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+.piece.flash-in { animation: flash-in 1.4s ease-out; }
+.piece.flash-out { animation: flash-out 1.4s ease-out; }
+@keyframes flash-in {
+  0%, 60% { filter: drop-shadow(0 0 calc(var(--u) * 0.2) var(--select)) drop-shadow(0 0 calc(var(--u) * 0.1) var(--select)); }
+}
+@keyframes flash-out {
+  0%, 60% { filter: drop-shadow(0 0 calc(var(--u) * 0.2) var(--accent)) drop-shadow(0 0 calc(var(--u) * 0.1) var(--accent)); }
+}
+
 .piece.shake { animation: shake 0.3s; }
 @keyframes shake {
   25% { transform: translateX(-4px); }
@@ -211,6 +228,14 @@ kbd {
 .modal-card h2 { margin: 4px 0 8px; font-size: 1.8rem; }
 .modal-card p { margin: 0 0 20px; line-height: 1.5; }
 .modal-emoji { font-size: 3rem; }
+.modal-card .win-help {
+  margin-top: -8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #fbeedd;
+  font-weight: 600;
+}
+.modal-card .win-help.unaided { background: #e3f1e4; color: #2e7d32; }
 
 @keyframes fade { from { opacity: 0; } }
 @keyframes pop { from { transform: scale(0.7); opacity: 0; } }

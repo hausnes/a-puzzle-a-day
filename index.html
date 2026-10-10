@@ -16,6 +16,7 @@
       <span class="timer" id="timer" title="Tid brukt">00:00</span>
       <button type="button" id="btn-rotate" title="Roter valgt brikke (R)">⟳ Roter</button>
       <button type="button" id="btn-flip" title="Speilvend valgt brikke (F)">⇋ Speilvend</button>
+      <button type="button" id="btn-hint" title="Få hjelp til å legge én brikke (maks 3 per dag)">💡 Hint (3 igjen)</button>
       <button type="button" id="btn-reset">Start på nytt</button>
       <label class="toggle"><input type="checkbox" id="show-goal" checked> Marker dagens ruter</label>
     </div>
@@ -37,6 +38,9 @@
         <li><b>Tastatur:</b> <kbd>Tab</kbd> velger brikke, <kbd>Enter</kbd> plukker den opp, piltastene flytter,
           <kbd>R</kbd>/<kbd>F</kbd> roterer/speilvender, <kbd>Enter</kbd> legger den ned, <kbd>Esc</kbd> avbryter.
           <kbd>Delete</kbd> sender brikken tilbake.</li>
+        <li><b>Hint:</b> du kan få hjelp til å legge opptil tre brikker per dag. Ligger noen av brikkene dine
+          slik at oppgaven ikke kan løses, flytter hintet dem. Antall hint vises når du har løst dagens oppgave,
+          og «Start på nytt» nullstiller ikke telleren.</li>
       </ul>
     </details>
   </main>
@@ -46,6 +50,7 @@
       <div class="modal-emoji" aria-hidden="true">🎉</div>
       <h2 id="win-title">Gratulerer!</h2>
       <p id="win-text"></p>
+      <p id="win-help" class="win-help"></p>
       <button type="button" id="btn-close-win">Lukk</button>
     </div>
   </div>
