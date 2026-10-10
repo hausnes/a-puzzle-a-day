@@ -249,6 +249,18 @@ kbd {
   z-index: 1001;
 }
 
+/* ---------- Mobil ---------- */
+
+@media (max-width: 600px) {
+  .top { padding: 8px 12px; gap: 6px 16px; }
+  h1 { font-size: 1.15rem; }
+  .goal { font-size: 0.9rem; }
+  .toolbar { gap: 6px; font-size: 0.9rem; }
+  .toolbar button { padding: 5px 9px; }
+  main { padding: 0 12px 24px; }
+  .status { margin: 8px 0; font-size: 0.9rem; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .piece, .piece.kbd { transition: none; }
   .modal, .modal-card { animation: none; }

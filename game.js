@@ -252,34 +252,44 @@
   // ---------- Layout ----------
   // Alle posisjoner regnes i "ruter" og ganges med rutestørrelsen ved tegning.
   const SLOT = 4.6; // hver brikke har en plass på 4×4 ruter i brikkeområdet
+  const COMPACT_SCALE = 0.5; // på mobil vises brikkene i halv størrelse til du drar dem
 
   function computeLayout() {
     const availW = Math.max(240, document.getElementById('stage').clientWidth);
     const availH = Math.max(320, window.innerHeight - document.querySelector('.top').offsetHeight - 70);
-    const make = (where, cols, rows) => {
-      const trayW = cols * SLOT, trayH = rows * SLOT;
+    // `s` er hvor store brikkene er i brikkeområdet, i forhold til på brettet.
+    const make = (where, cols, rows, s = 1) => {
+      const slot = SLOT * s, trayW = cols * slot, trayH = rows * slot;
       if (where === 'right') {
         const W = 8 + 0.5 + trayW, H = Math.max(8, trayH);
-        return { cols, W, H, board: { x: 0.5, y: (H - 8) / 2 + 0.5 }, tray: { x: 8.5, y: (H - trayH) / 2, w: trayW, h: trayH } };
+        return { cols, s, W, H, board: { x: 0.5, y: (H - 8) / 2 + 0.5 }, tray: { x: 8.5, y: (H - trayH) / 2, w: trayW, h: trayH } };
       }
       const W = Math.max(8, trayW), H = 8 + 0.5 + trayH;
-      return { cols, W, H, board: { x: (W - 8) / 2 + 0.5, y: 0.5 }, tray: { x: (W - trayW) / 2, y: 8.5, w: trayW, h: trayH } };
+      return { cols, s, W, H, board: { x: (W - 8) / 2 + 0.5, y: 0.5 }, tray: { x: (W - trayW) / 2, y: 8.5, w: trayW, h: trayH } };
     };
     for (const l of [make('right', 4, 2), make('below', 4, 2)]) {
       l.u = Math.floor(Math.min(64, availW / l.W, availH / l.H));
       if (l.u >= 34) return l;
     }
-    const l = make('below', 2, 4); // smal skjerm: siden kan scrolles
-    l.u = Math.floor(Math.min(56, availW / l.W));
+    // Smal skjerm (mobil): små brikker tett under brettet, så brett og brikker får plass samtidig.
+    const l = make('below', 4, 2, COMPACT_SCALE);
+    l.u = Math.floor(Math.min(56, availW / l.W, availH / l.H));
+    // Er skjermen for lav, holder det at selve spillflaten får plass – overskriften kan scrolles bort.
+    if (l.u < 32) l.u = Math.floor(Math.min(56, availW / l.W, Math.max(32, (window.innerHeight - 24) / l.H)));
     return l;
   }
+
+  // Brikker i brikkeområdet vises mindre på mobil; brikka du drar eller flytter, er alltid full størrelse.
+  const pieceScale = p =>
+    p.board || (drag && drag.p === p && drag.moved) || (kbd && kbd.p === p) ? 1 : layout.s;
 
   function homePos(p) {
     const { w, h } = sizeOf(cellsOf(p));
     const col = p.index % layout.cols, row = Math.floor(p.index / layout.cols);
+    const s = layout.s;
     return {
-      x: layout.tray.x + col * SLOT + (SLOT - w) / 2,
-      y: layout.tray.y + row * SLOT + (SLOT - h) / 2,
+      x: layout.tray.x + (col * SLOT + (SLOT - w) / 2) * s,
+      y: layout.tray.y + (row * SLOT + (SLOT - h) / 2) * s,
     };
   }
 
@@ -291,7 +301,7 @@
   }
 
   // ---------- Tegning ----------
-  function pieceSvg(p) {
+  function pieceSvg(p, scale) {
     const cells = cellsOf(p);
     const { w, h } = sizeOf(cells);
     const set = new Set(cells.map(([x, y]) => key(x, y)));
@@ -307,7 +317,7 @@
       if (!set.has(key(x - 1, y))) edges += `M${x} ${y}V${y + 1}`;
       if (!set.has(key(x + 1, y))) edges += `M${x + 1} ${y}V${y + 1}`;
     });
-    return `<svg width="${w * layout.u}" height="${h * layout.u}" viewBox="0 0 ${w} ${h}">` +
+    return `<svg width="${w * layout.u * scale}" height="${h * layout.u * scale}" viewBox="0 0 ${w} ${h}">` +
       fill + grain + `<path class="edge" d="${edges}"/>` + hintBadge(p, cells) + hit + '</svg>';
   }
 
@@ -339,9 +349,10 @@
     }
 
     for (const p of pieces) {
-      const svgKey = `${p.orient.rot}${p.orient.flip}${u}${hasBadge(p)}`;
+      const scale = pieceScale(p);
+      const svgKey = `${p.orient.rot}${p.orient.flip}${u}${scale}${hasBadge(p)}`;
       if (p.svgKey !== svgKey) {
-        p.el.innerHTML = pieceSvg(p);
+        p.el.innerHTML = pieceSvg(p, scale);
         p.svgKey = svgKey;
       }
       const pos = displayPos(p);
@@ -493,10 +504,12 @@
     const cell = Number(hit.dataset.i);
     const pointer = pointerUnits(e);
     const start = displayPos(p);
+    const scale = pieceScale(p);
     const [cx, cy] = cellsOf(p)[cell];
     drag = {
       p, cell, pointer,
-      frac: { x: pointer.x - start.x - cx, y: pointer.y - start.y - cy },
+      // Hvor i ruta du tok tak (0–1), så samme punkt blir under fingeren når brikka vokser til full størrelse.
+      frac: { x: (pointer.x - start.x) / scale - cx, y: (pointer.y - start.y) / scale - cy },
       startClient: { x: e.clientX, y: e.clientY },
       moved: false,
       shift: e.shiftKey,
