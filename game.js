@@ -47,19 +47,22 @@
   const MONTHS_NO = ['januar', 'februar', 'mars', 'april', 'mai', 'juni', 'juli',
     'august', 'september', 'oktober', 'november', 'desember'];
 
+  const pad = n => String(n).padStart(2, '0');
+  const isoDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const parseIso = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+  // Går via kalenderdatoer, ikke millisekunder, så sommertid ikke gir hull.
+  const addDays = (s, n) => { const d = parseIso(s); d.setDate(d.getDate() + n); return isoDate(d); };
+
   // ?dato=2026-12-24 i URL-en overstyrer dagens dato (nyttig for testing).
   function today() {
     const param = new URLSearchParams(location.search).get('dato');
-    let d = new Date();
-    if (param && /^\d{4}-\d{2}-\d{2}$/.test(param)) {
-      const [y, m, day] = param.split('-').map(Number);
-      d = new Date(y, m - 1, day);
-    }
-    const pad = n => String(n).padStart(2, '0');
+    const override = !!param && /^\d{4}-\d{2}-\d{2}$/.test(param);
+    const d = override ? parseIso(param) : new Date();
     return {
       month: d.getMonth(),
       day: d.getDate(),
-      key: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+      key: isoDate(d),
+      override,
       text: d.toLocaleDateString('nb-NO', { weekday: 'long', day: 'numeric', month: 'long' }),
       short: `${d.getDate()}. ${MONTHS_NO[d.getMonth()]}`,
     };
@@ -153,6 +156,8 @@
       localStorage.setItem(storageKey(), JSON.stringify({
         pieces: pieces.map(p => ({ id: p.id, orient: p.orient, board: p.board, hintKey: p.hintKey })),
         startedAt, solvedAt, hintsUsed, solvedHints,
+        // Dager spilt med ?dato= telles ikke med i statistikken.
+        ...(date.override && { test: true }),
       }));
     } catch { /* lagring er bare en bonus */ }
   }
@@ -637,7 +642,7 @@
 
   // R/F virker på brikka du drar, flytter med tastaturet, eller sist valgte brikke.
   document.addEventListener('keydown', e => {
-    if (e.target.matches('input, textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.target.matches('input, textarea') || e.metaKey || e.ctrlKey || e.altKey || openModalEl()) return;
     const k = e.key.toLowerCase();
     if (drag && drag.moved) {
       if (k === 'r') turn(drag.p, 'rotate');
@@ -761,8 +766,10 @@
       `Du løste dagens puslespill for ${date.short} på ${formatTime(solvedAt - startedAt)}.`;
     $('win-help').textContent = helpText();
     $('win-help').classList.toggle('unaided', solvedHints === 0);
-    winEl.hidden = false;
-    $('btn-close-win').focus();
+    const { streak } = computeStats();
+    $('win-streak').textContent = streak.current > 1 ? `🔥 ${streak.current} dager på rad!` : '';
+    $('win-streak').hidden = streak.current < 2;
+    openModal(winEl, $('btn-close-win'));
     confetti();
   }
 
@@ -771,13 +778,206 @@
     return `Du måtte få hjelp ${solvedHints} ${solvedHints === 1 ? 'gang' : 'ganger'}.`;
   }
 
-  function hideWin() {
-    winEl.hidden = true;
+  // ---------- Dialoger ----------
+  let returnFocus = null;
+  const openModalEl = () => document.querySelector('.modal:not([hidden])');
+
+  function openModal(el, focusEl) {
+    const open = openModalEl();
+    if (open) open.hidden = true; // f.eks. fra gratulasjon til statistikk
+    else returnFocus = document.activeElement;
+    el.hidden = false;
+    focusEl.focus();
   }
 
-  $('btn-close-win').addEventListener('click', hideWin);
-  winEl.addEventListener('click', e => { if (e.target === winEl) hideWin(); });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !winEl.hidden) hideWin(); });
+  function closeModal() {
+    const open = openModalEl();
+    if (!open) return;
+    open.hidden = true;
+    if (returnFocus && document.contains(returnFocus)) returnFocus.focus();
+    returnFocus = null;
+  }
+
+  for (const el of document.querySelectorAll('.modal')) {
+    el.addEventListener('click', e => { if (e.target === el) closeModal(); });
+  }
+  for (const btn of document.querySelectorAll('.btn-close-modal')) btn.addEventListener('click', closeModal);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+  // ---------- Statistikk ----------
+  // Alt regnes ut fra det som allerede ligger lagret i nettleseren, én post per dag.
+  function history(todayKey) {
+    const days = new Map();
+    let keys = [];
+    try { keys = Object.keys(localStorage); } catch { return days; }
+    for (const k of keys) {
+      const m = /^apad:v1:(\d{4}-\d{2}-\d{2})$/.exec(k);
+      if (!m || m[1] > todayKey) continue;
+      try {
+        const data = JSON.parse(localStorage.getItem(k));
+        if (!data || data.test) continue;
+        const solved = !!data.solvedAt;
+        days.set(m[1], {
+          solved,
+          time: solved && data.startedAt ? data.solvedAt - data.startedAt : null,
+          hints: data.hintsUsed | 0,
+          unaided: solved && !(data.solvedHints | 0),
+        });
+      } catch { /* hopp over ødelagte dager */ }
+    }
+    return days;
+  }
+
+  // Lengste og nåværende rekke med dager der `ok` gjelder. Er ikke dagens løst ennå,
+  // lever rekka fra i går fortsatt.
+  function streakOf(days, todayKey, ok) {
+    const hit = k => days.has(k) && ok(days.get(k));
+    let longest = 0, run = 0, prev = null;
+    for (const k of [...days.keys()].sort()) {
+      if (!hit(k)) { run = 0; prev = null; continue; }
+      run = prev && addDays(prev, 1) === k ? run + 1 : 1;
+      prev = k;
+      longest = Math.max(longest, run);
+    }
+    let current = 0;
+    let k = hit(todayKey) ? todayKey : addDays(todayKey, -1);
+    while (hit(k)) { current++; k = addDays(k, -1); }
+    return { current, longest };
+  }
+
+  function computeStats() {
+    const todayKey = isoDate(new Date());
+    const days = history(todayKey);
+    const all = [...days.values()];
+    const times = all.filter(d => d.time != null).map(d => d.time).sort((a, b) => a - b);
+    return {
+      todayKey,
+      days,
+      played: days.size,
+      solved: all.filter(d => d.solved).length,
+      unaided: all.filter(d => d.unaided).length,
+      hints: all.reduce((sum, d) => sum + d.hints, 0),
+      hintDays: all.filter(d => d.hints > 0).length,
+      times,
+      avg: times.length ? times.reduce((a, b) => a + b, 0) / times.length : null,
+      median: times.length ? times[Math.floor((times.length - 1) / 2)] : null,
+      best: times.length ? times[0] : null,
+      streak: streakOf(days, todayKey, d => d.solved),
+      cleanStreak: streakOf(days, todayKey, d => d.unaided),
+    };
+  }
+
+  const BUCKETS = [
+    { max: 1, label: '< 1 min' }, { max: 2, label: '1–2 min' }, { max: 5, label: '2–5 min' },
+    { max: 10, label: '5–10 min' }, { max: 20, label: '10–20 min' }, { max: Infinity, label: '20+ min' },
+  ];
+  const bucketOf = ms => BUCKETS.findIndex(b => ms < b.max * 60000);
+  const WEEKS = 15;
+  const esc = s => String(s).replace(/[&<>"]/g, c => `&#${c.charCodeAt(0)};`);
+
+  function tile(value, label) {
+    return `<div class="tile"><div class="tile-value">${esc(value)}</div><div class="tile-label">${esc(label)}</div></div>`;
+  }
+
+  function renderStats() {
+    const st = computeStats();
+    const body = $('stats-body');
+    if (!st.played) {
+      body.innerHTML = '<p class="stats-empty">Ingen statistikk ennå. Løs dagens puslespill, så begynner tellingen!</p>';
+      $('btn-share-stats').hidden = true;
+      return;
+    }
+    const t = ms => ms == null ? '–' : formatTime(ms);
+
+    // Fordeling av løsetider, med dagens tid uthevet.
+    const counts = BUCKETS.map(() => 0);
+    st.times.forEach(ms => counts[bucketOf(ms)]++);
+    const todayTime = st.days.get(st.todayKey)?.time;
+    const todayBucket = todayTime != null ? bucketOf(todayTime) : -1;
+    const maxCount = Math.max(...counts, 1);
+    const bars = BUCKETS.map((b, i) => `
+      <div class="bar-row${i === todayBucket ? ' today' : ''}">
+        <span class="bar-label">${b.label}</span>
+        <span class="bar-track"><span class="bar" style="width:${Math.max(counts[i] ? 8 : 0, counts[i] / maxCount * 100)}%"></span></span>
+        <span class="bar-count">${counts[i]}</span>
+      </div>`).join('');
+
+    // Kalender for de siste ukene, én kolonne per uke (mandag øverst).
+    const todayDate = parseIso(st.todayKey);
+    const start = addDays(st.todayKey, -((todayDate.getDay() + 6) % 7) - (WEEKS - 1) * 7);
+    let cells = '';
+    for (let k = start; k <= st.todayKey; k = addDays(k, 1)) {
+      const d = st.days.get(k);
+      const cls = !d ? '' : d.unaided ? 'unaided' : d.solved ? 'aided' : 'started';
+      const what = !d ? 'ikke spilt' : d.unaided ? `løst uten hint (${t(d.time)})`
+        : d.solved ? `løst med ${d.hints} hint (${t(d.time)})` : 'påbegynt';
+      const label = parseIso(k).toLocaleDateString('nb-NO', { weekday: 'short', day: 'numeric', month: 'short' });
+      cells += `<span class="cal-day ${cls}${k === st.todayKey ? ' is-today' : ''}" title="${esc(label)}: ${what}"></span>`;
+    }
+
+    body.innerHTML = `
+      <div class="tiles">
+        ${tile(st.streak.current, 'dager på rad')}
+        ${tile(st.streak.longest, 'lengste rekke')}
+        ${tile(st.solved, 'dager løst')}
+      </div>
+      <div class="tiles">
+        ${tile(t(st.avg), 'snittid')}
+        ${tile(t(st.median), 'mediantid')}
+        ${tile(t(st.best), 'beste tid')}
+      </div>
+      <div class="tiles">
+        ${tile(st.unaided, 'løst uten hint')}
+        ${tile(st.cleanStreak.current, 'på rad uten hint')}
+        ${tile(st.hints, 'hint brukt totalt')}
+      </div>
+      <h3>Løsetider</h3>
+      <div class="bars">${bars}</div>
+      <h3>Siste ${WEEKS} uker</h3>
+      <div class="calendar" role="img" aria-label="Kalender: ${st.solved} av ${st.played} påbegynte dager er løst">${cells}</div>
+      <div class="legend" aria-hidden="true">
+        <span><i class="cal-day unaided"></i>Uten hint</span>
+        <span><i class="cal-day aided"></i>Med hint</span>
+        <span><i class="cal-day started"></i>Påbegynt</span>
+      </div>
+      <p class="stats-note">Statistikken ligger bare i denne nettleseren.</p>`;
+    $('btn-share-stats').hidden = !st.days.get(st.todayKey)?.solved;
+  }
+
+  function showStats() {
+    renderStats();
+    openModal($('stats'), $('btn-close-stats'));
+  }
+
+  // ---------- Deling ----------
+  async function share(btn) {
+    const { streak } = computeStats();
+    const lines = [
+      `🧩 A-Puzzle-A-Day · ${date.short}`,
+      `⏱️ ${formatTime(solvedAt - startedAt)} · ${solvedHints ? `💡 ${solvedHints} hint` : '🏆 uten hint'}`,
+    ];
+    if (streak.current > 1) lines.push(`🔥 ${streak.current} dager på rad`);
+    const url = location.origin + location.pathname;
+    const text = lines.join('\n');
+    // Delemenyen passer på mobil; på PC er det enklere å kopiere.
+    if (navigator.share && matchMedia('(pointer: coarse)').matches) {
+      try { await navigator.share({ text: text + '\n' + url }); return; }
+      catch (e) { if (e.name === 'AbortError') return; }
+    }
+    const old = btn.textContent;
+    try {
+      await navigator.clipboard.writeText(text + '\n' + url);
+      btn.textContent = '✓ Kopiert!';
+    } catch {
+      btn.textContent = 'Kunne ikke kopiere';
+    }
+    setTimeout(() => { btn.textContent = old; }, 2000);
+  }
+
+  $('btn-stats').addEventListener('click', showStats);
+  $('btn-win-stats').addEventListener('click', showStats);
+  $('btn-share-win').addEventListener('click', e => share(e.currentTarget));
+  $('btn-share-stats').addEventListener('click', e => share(e.currentTarget));
 
   function confetti() {
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
