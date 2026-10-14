@@ -401,6 +401,9 @@ kbd {
 .backup .stats-note { margin: 0 0 12px; }
 .modal-card .backup-status { margin: 12px 0 0; font-weight: 600; color: var(--ink); }
 .modal-card .backup-status.error { color: var(--accent); }
+.backup + .backup { margin-top: 0; }
+.modal-card .sync-user { margin: 0 0 4px; word-break: break-word; }
+.modal-card .sync-privacy { margin: 12px 0 0; font-size: 0.78rem; }
 
 .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
 .tile { padding: 10px 4px; border-radius: 10px; background: var(--tile); }

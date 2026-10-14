@@ -81,6 +81,7 @@
   let kbd = null;    // tastaturflytting som pågår
   let layout = null;
   let zCounter = pieces.length;
+  let syncDirty = false; // noe er lagret lokalt siden forrige synkronisering
 
   const cellsOf = (p, orient = p.orient) => transform(p.cells, orient);
 
@@ -159,6 +160,7 @@
         // Dager spilt med ?dato= telles ikke med i statistikken.
         ...(date.override && { test: true }),
       }));
+      syncDirty = true;
     } catch { /* lagring er bare en bonus */ }
   }
 
@@ -771,6 +773,7 @@
       if (!startedAt) startedAt = solvedAt;
       save();
       showWin(before);
+      syncNow();
     }
     say(`Løst! Brettet viser ${date.short}. Tid: ${formatTime(solvedAt - startedAt)}. ${helpText()}`, true);
   }
@@ -971,6 +974,10 @@
     renderStats();
     $('backup-status').hidden = true;
     renderBackupNote();
+    // Lastes inn nå, så innloggingsvinduet kan åpnes med en gang knappen trykkes
+    // (ellers kan nettleseren blokkere det).
+    loadSync().catch(() => { /* vises i renderSync */ });
+    renderSync();
     openModal($('stats'), $('btn-close-stats'));
   }
 
@@ -992,8 +999,10 @@
   async function renderBackupNote() {
     let persisted = false;
     try { persisted = !!(await navigator.storage?.persisted?.()); } catch { /* ikke støttet */ }
-    $('backup-note').textContent = 'Statistikken og milepælene ligger bare i denne nettleseren' +
-      (persisted ? ', og nettleseren har lovet å ikke slette dem av seg selv. ' : '. ') +
+    $('backup-note').textContent = (syncUser
+      ? 'Du er logget inn, så fremgangen ligger også i skyen. '
+      : 'Statistikken og milepælene ligger bare i denne nettleseren' +
+        (persisted ? ', og nettleseren har lovet å ikke slette dem av seg selv. ' : '. ')) +
       'Ta en sikkerhetskopi, eller hent inn en fra en annen enhet eller nettleser.';
   }
 
@@ -1038,44 +1047,57 @@
     try { return JSON.parse(s); } catch { return undefined; }
   }
 
+  // Slår sammen lagrede nøkler (samme format som i localStorage) med det som ligger her.
+  // Brukes både av sikkerhetskopien og synkroniseringen. Kaster feil hvis lagringen ikke virker.
+  function mergeIntoStorage(entries) {
+    let added = 0, updated = 0;
+    for (const [k, v] of Object.entries(entries)) {
+      if (typeof v !== 'string') continue;
+      const local = localStorage.getItem(k);
+      if (DAY_KEY.test(k)) {
+        const other = parseJson(v);
+        if (!other || typeof other !== 'object') continue;
+        const value = JSON.stringify(mergeDay(parseJson(local) || null, other));
+        if (local == null) added++;
+        else if (value !== local) updated++;
+        if (value !== local) localStorage.setItem(k, value);
+      } else if (k === 'apad:seenMilestones') {
+        const seen = new Set([...(parseJson(local) || []), ...(parseJson(v) || [])]);
+        localStorage.setItem(k, JSON.stringify([...seen]));
+      } else if (OTHER_KEYS.includes(k) && local == null) {
+        localStorage.setItem(k, v); // valgt utseende o.l. overstyrer ikke det som er valgt her
+      }
+    }
+    return { added, updated };
+  }
+
+  // Last inn dagens brett, utseende og statistikk på nytt etter at lagringen er endret utenfra.
+  function refreshAfterMerge() {
+    if (drag || kbd) return; // brettet lastes inn neste gang i stedet for midt i et trekk
+    load();
+    loadLook();
+    updateLooksBadge();
+    render();
+    evaluate();
+    if (!$('stats').hidden) renderStats();
+  }
+
   function importBackup(text) {
     const backup = parseJson(text);
     if (!backup || backup.app !== BACKUP_APP || typeof backup.data !== 'object' || !backup.data) {
       backupStatus('Dette ser ikke ut som en sikkerhetskopi fra A-Puzzle-A-Day.', true);
       return;
     }
-    let added = 0, updated = 0;
+    let added, updated;
     try {
-      for (const [k, v] of Object.entries(backup.data)) {
-        if (typeof v !== 'string') continue;
-        const local = localStorage.getItem(k);
-        if (DAY_KEY.test(k)) {
-          const other = parseJson(v);
-          if (!other || typeof other !== 'object') continue;
-          const merged = mergeDay(parseJson(local) || null, other);
-          const value = JSON.stringify(merged);
-          if (local == null) added++;
-          else if (value !== local) updated++;
-          localStorage.setItem(k, value);
-        } else if (k === 'apad:seenMilestones') {
-          const seen = new Set([...(parseJson(local) || []), ...(parseJson(v) || [])]);
-          localStorage.setItem(k, JSON.stringify([...seen]));
-        } else if (OTHER_KEYS.includes(k) && local == null) {
-          localStorage.setItem(k, v); // valgt utseende o.l. overstyrer ikke det som er valgt her
-        }
-      }
+      ({ added, updated } = mergeIntoStorage(backup.data));
     } catch {
       backupStatus('Fikk ikke lagret sikkerhetskopien i nettleseren.', true);
       return;
     }
-    // Last inn dagens brett og utseende på nytt, i tilfelle sikkerhetskopien endret dem.
-    load();
-    loadLook();
-    updateLooksBadge();
-    render();
-    evaluate();
-    renderStats();
+    refreshAfterMerge();
     persistStorage();
+    syncNow();
     backupStatus(added || updated
       ? `✓ Hentet inn: ${added} ${added === 1 ? 'ny' : 'nye'} og ${updated} ${updated === 1 ? 'oppdatert' : 'oppdaterte'} ${added + updated === 1 ? 'dag' : 'dager'}.`
       : '✓ Sikkerhetskopien er hentet inn. Alt i den fantes allerede her.');
@@ -1087,6 +1109,171 @@
     const file = e.target.files[0];
     e.target.value = ''; // så samme fil kan velges igjen
     if (file) importBackup(await file.text());
+  });
+
+  // ---------- Innlogging og synkronisering ----------
+  // Valgfritt: localStorage er fortsatt hovedlagringen. Med innlogging hentes det som ligger
+  // i skyen, slås sammen med det som ligger her (som en sikkerhetskopi), og resultatet lagres
+  // tilbake. Dette skjer ved innlogging, når en oppgave er løst, og når siden lukkes eller åpnes igjen.
+  const SYNC_KEY = 'apad:sync'; // satt når spilleren er logget inn i denne nettleseren
+  const SYNC_AGAIN_MS = 5 * 60000; // synk igjen når siden vises, hvis det er så lenge siden
+  let sync = null;           // sync.js, når den er lastet
+  let syncLoading = null;
+  let syncUser = undefined;  // undefined = vet ikke ennå, null = ikke logget inn
+  let syncBusy = false;
+  let syncLast = null;
+  let syncError = null;
+
+  function loadSync() {
+    if (!syncLoading) {
+      syncLoading = import('./sync.js').then(m => {
+        sync = m;
+        m.onUser(user => {
+          syncUser = user;
+          try {
+            if (user) localStorage.setItem(SYNC_KEY, '1'); else localStorage.removeItem(SYNC_KEY);
+          } catch { /* ignorer */ }
+          if (user) syncNow();
+          renderSync();
+        });
+        return m;
+      });
+      syncLoading.catch(() => {
+        syncLoading = null;
+        syncError = 'Fikk ikke kontakt med innloggingen. Sjekk nettforbindelsen og prøv igjen.';
+        renderSync();
+      });
+    }
+    return syncLoading;
+  }
+
+  // Det som synkroniseres: bare tallene statistikken og milepælene trenger, ikke brikkenes plass.
+  function cloudData() {
+    const days = {};
+    let seen = [], look = null;
+    for (const k of Object.keys(localStorage)) {
+      if (!DAY_KEY.test(k)) continue;
+      const d = parseJson(localStorage.getItem(k));
+      if (!d || d.test) continue;
+      days[k.slice(8)] = {
+        startedAt: d.startedAt || null, solvedAt: d.solvedAt || null,
+        hintsUsed: d.hintsUsed | 0, solvedHints: d.solvedHints | 0,
+      };
+    }
+    seen = (parseJson(localStorage.getItem('apad:seenMilestones')) || []).slice().sort();
+    look = parseJson(localStorage.getItem(LOOK_KEY)) || null;
+    return { days, seen, look };
+  }
+
+  function cloudToEntries(remote) {
+    const entries = {};
+    for (const [day, d] of Object.entries(remote.days || {})) entries['apad:v1:' + day] = JSON.stringify(d);
+    if (Array.isArray(remote.seen)) entries['apad:seenMilestones'] = JSON.stringify(remote.seen);
+    if (remote.look) entries[LOOK_KEY] = JSON.stringify(remote.look);
+    return entries;
+  }
+
+  // Sammenligner uavhengig av rekkefølgen på nøklene.
+  const canon = v => Array.isArray(v) ? '[' + v.map(canon).join() + ']'
+    : v && typeof v === 'object' ? '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + canon(v[k])).join() + '}'
+    : JSON.stringify(v ?? null);
+
+  async function syncNow() {
+    if (!sync || !syncUser || syncBusy) return;
+    syncBusy = true;
+    syncDirty = false;
+    renderSync();
+    try {
+      const remote = (await sync.pull()) || {};
+      const { added, updated } = mergeIntoStorage(cloudToEntries(remote));
+      const merged = cloudData();
+      const { days, seen, look } = remote;
+      if (canon({ days, seen, look }) !== canon(merged)) await sync.push({ ...merged, updatedAt: Date.now() });
+      if (added || updated) refreshAfterMerge();
+      syncLast = Date.now();
+      syncError = null;
+    } catch {
+      syncDirty = true;
+      syncError = 'Synkroniseringen mislyktes. Spillet prøver igjen senere, og ingenting er tapt.';
+    }
+    syncBusy = false;
+    renderSync();
+  }
+
+  async function signIn() {
+    syncError = null;
+    try {
+      await (sync || await loadSync()).signIn(); // onUser tar seg av resten
+      persistStorage();
+    } catch (e) {
+      if (e?.code === 'auth/popup-closed-by-user' || e?.code === 'auth/cancelled-popup-request') return;
+      syncError = e?.code === 'auth/popup-blocked'
+        ? 'Nettleseren blokkerte innloggingsvinduet. Trykk på knappen en gang til.'
+        : 'Innloggingen mislyktes. Sjekk nettforbindelsen og prøv igjen.';
+      renderSync();
+    }
+  }
+
+  async function signOut() {
+    await syncNow(); // få med det siste før vi logger ut
+    try { await sync.signOut(); } catch { /* onUser oppdaterer uansett */ }
+  }
+
+  async function deleteCloud() {
+    if (!confirm('Vil du slette fremgangen din fra skyen og kontoen din i spillet? ' +
+      'Det som ligger i denne nettleseren, blir liggende.')) return;
+    try {
+      await sync.deleteAccount();
+      syncError = null;
+      syncLast = null;
+      say('Dataene dine i skyen og kontoen din er slettet.');
+    } catch (e) {
+      if (e?.code === 'auth/popup-closed-by-user') return;
+      syncError = 'Fikk ikke slettet dataene. Prøv igjen.';
+    }
+    renderSync();
+  }
+
+  function renderSync() {
+    const body = $('sync-body');
+    renderBackupNote();
+    const status = syncError ? `<p class="stats-note backup-status error" role="status">${esc(syncError)}</p>` : '';
+    if (syncUser) {
+      const when = syncBusy ? 'Synkroniserer …'
+        : syncLast ? `Sist synkronisert kl. ${new Date(syncLast).toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' })}.`
+        : '';
+      body.innerHTML = `
+        <p class="stats-note sync-user">Logget inn som <b>${esc(syncUser.email || syncUser.displayName || 'deg')}</b>. ${when}</p>
+        <div class="modal-actions">
+          <button type="button" data-sync="now"${syncBusy ? ' disabled' : ''}>🔄 Synkroniser nå</button>
+          <button type="button" data-sync="out">Logg ut</button>
+          <button type="button" data-sync="delete">Slett data i skyen</button>
+        </div>${status}`;
+      return;
+    }
+    const waiting = syncUser === undefined && syncLoading;
+    body.innerHTML = `
+      <p class="stats-note">Logg inn med Google for å ta vare på fremgangen og bruke den på flere enheter.
+        Spillet virker like bra uten.</p>
+      <div class="modal-actions">
+        <button type="button" data-sync="in"${waiting ? ' disabled' : ''}>Logg inn med Google</button>
+      </div>${status}
+      <p class="stats-note sync-privacy">Ved innlogging lagres spillhistorikken din (datoer, tider,
+        antall hint og valgt utseende) hos Google Firebase på servere i EU (Finland). Innloggingen og
+        e-postadressen din håndteres av Google. Du kan slette alt når du vil.</p>`;
+  }
+
+  $('sync-body').addEventListener('click', e => {
+    const action = e.target.closest('button[data-sync]')?.dataset.sync;
+    if (action === 'in') signIn();
+    else if (action === 'now') syncNow();
+    else if (action === 'out') signOut();
+    else if (action === 'delete') deleteCloud();
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') { if (syncDirty) syncNow(); }
+    else if (!syncLast || Date.now() - syncLast > SYNC_AGAIN_MS) syncNow();
   });
 
   // ---------- Deling ----------
@@ -1419,6 +1606,7 @@
   loadLook();
   updateLooksBadge();
   if (computeStats().solved) persistStorage();
+  try { if (localStorage.getItem(SYNC_KEY)) loadSync().catch(() => { /* prøver igjen når statistikken åpnes */ }); } catch { /* ignorer */ }
   render();
   evaluate();
   timerEl.textContent = startedAt ? formatTime((solvedAt || Date.now()) - startedAt) : '00:00';

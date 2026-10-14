@@ -36,6 +36,12 @@ Når dagens oppgave er løst, kan du dele resultatet (delemeny på mobil, utklip
 Nederst i statistikken kan du **laste ned en sikkerhetskopi** (en JSON-fil) og **hente den inn** igjen,
 for eksempel på en ny telefon eller i hjemskjerm-appen på iPhone. Sikkerhetskopien slås sammen med det
 som allerede ligger der: en løst dag går foran en uløst, og har du løst samme dag to steder, gjelder den første løsningen.
+Du kan også **logge inn med Google** under Statistikk. Da synkroniseres statistikken, milepælene og valgt
+utseende mellom enhetene dine via Firebase, ved innlogging, når en oppgave er løst og når siden lukkes eller åpnes igjen.
+Det som ligger i nettleseren, er fortsatt hovedlagringen, så spillet virker uten konto og uten nett.
+Brikkenes plassering midt i en oppgave synkroniseres ikke, bare tallene statistikken trenger.
+«Slett data i skyen» sletter både dataene og kontoen.
+
 Når du har løst minst én oppgave, ber spillet også nettleseren om å ikke slette dataene av seg selv
 (`navigator.storage.persist()`). Nettleseren bestemmer selv om den sier ja.
 
@@ -78,4 +84,5 @@ Dager spilt på denne måten telles ikke med i statistikken.
 - `style.css` – utseende
 - `game.js` – brett, brikker, dra-og-slipp, tastaturstyring og sjekk av løsning
 - `favicon.svg`, `apple-touch-icon.png` og `icon-*.png` – ikoner for fanen, hjemskjermen og installert app
+- `sync.js` – innlogging og synkronisering med Firebase (lastes bare inn for dem som bruker det)
 - `manifest.webmanifest` – navn, ikoner og farger når spillet legges til på hjemskjermen eller installeres
