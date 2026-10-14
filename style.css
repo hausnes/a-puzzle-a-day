@@ -397,6 +397,11 @@ kbd {
 .modal-card .stats-empty { margin: 16px 0 24px; color: var(--muted); }
 .modal-card .stats-note { margin: 16px 0; font-size: 0.85rem; color: var(--muted); }
 
+.backup { margin: 20px 0; padding-top: 4px; border-top: 1px solid var(--cal-empty); }
+.backup .stats-note { margin: 0 0 12px; }
+.modal-card .backup-status { margin: 12px 0 0; font-weight: 600; color: var(--ink); }
+.modal-card .backup-status.error { color: var(--accent); }
+
 .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
 .tile { padding: 10px 4px; border-radius: 10px; background: var(--tile); }
 .tile-value { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }

@@ -33,6 +33,12 @@ antall hint, fordelingen av løsetider og en kalender over de siste 15 ukene.
 Alt regnes ut fra det som er lagret i nettleseren, så ingenting sendes noe sted.
 Når dagens oppgave er løst, kan du dele resultatet (delemeny på mobil, utklippstavle på PC).
 
+Nederst i statistikken kan du **laste ned en sikkerhetskopi** (en JSON-fil) og **hente den inn** igjen,
+for eksempel på en ny telefon eller i hjemskjerm-appen på iPhone. Sikkerhetskopien slås sammen med det
+som allerede ligger der: en løst dag går foran en uløst, og har du løst samme dag to steder, gjelder den første løsningen.
+Når du har løst minst én oppgave, ber spillet også nettleseren om å ikke slette dataene av seg selv
+(`navigator.storage.persist()`). Nettleseren bestemmer selv om den sier ja.
+
 ### Milepæler og utseende
 
 **🏅 Milepæler** viser mål du kan jobbe mot. Hver milepæl låser opp en ny bakgrunn for spillet

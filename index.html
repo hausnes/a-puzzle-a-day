@@ -73,6 +73,17 @@
     <div class="modal-card stats-card" role="dialog" aria-modal="true" aria-labelledby="stats-title">
       <h2 id="stats-title">Statistikk</h2>
       <div id="stats-body"></div>
+      <section class="backup" aria-labelledby="backup-title">
+        <h3 id="backup-title">Sikkerhetskopi</h3>
+        <p class="stats-note" id="backup-note">Statistikken og milepælene ligger bare i denne nettleseren.
+          Ta en sikkerhetskopi, eller hent inn en fra en annen enhet eller nettleser.</p>
+        <div class="modal-actions">
+          <button type="button" id="btn-export">💾 Last ned sikkerhetskopi</button>
+          <button type="button" id="btn-import">📂 Hent inn</button>
+        </div>
+        <input type="file" id="import-file" accept=".json,application/json" hidden>
+        <p id="backup-status" class="stats-note backup-status" role="status" hidden></p>
+      </section>
       <div class="modal-actions">
         <button type="button" id="btn-share-stats">📤 Del dagens resultat</button>
         <button type="button" id="btn-close-stats" class="btn-close-modal">Lukk</button>

@@ -790,6 +790,7 @@
     renderWinMilestones(st, before);
     openModal(winEl, $('btn-close-win'));
     confetti();
+    persistStorage();
   }
 
   function helpText() {
@@ -962,14 +963,131 @@
         <span><i class="cal-day aided"></i>Med hint</span>
         <span><i class="cal-day started"></i>Påbegynt</span>
       </div>
-      <p class="stats-note">Statistikken ligger bare i denne nettleseren.</p>`;
+`;
     $('btn-share-stats').hidden = !st.days.get(st.todayKey)?.solved;
   }
 
   function showStats() {
     renderStats();
+    $('backup-status').hidden = true;
+    renderBackupNote();
     openModal($('stats'), $('btn-close-stats'));
   }
+
+  // ---------- Sikkerhetskopi ----------
+  // Alt spillet lagrer, ligger under nøkler som begynner med «apad:». En sikkerhetskopi er
+  // disse nøklene i en JSON-fil, og når den hentes inn, slås den sammen med det som ligger her.
+  const BACKUP_APP = 'a-puzzle-a-day';
+  const DAY_KEY = /^apad:v1:\d{4}-\d{2}-\d{2}$/;
+  const OTHER_KEYS = ['apad:look', 'apad:seenMilestones', 'apad:showGoal'];
+
+  // Ber nettleseren om å ikke rydde bort dataene av seg selv (f.eks. Safaris sju-dagersregel).
+  // Nettleseren avgjør selv; vi spør først når spilleren faktisk har noe å miste.
+  async function persistStorage() {
+    try {
+      if (navigator.storage?.persist && !(await navigator.storage.persisted())) await navigator.storage.persist();
+    } catch { /* ikke støttet */ }
+  }
+
+  async function renderBackupNote() {
+    let persisted = false;
+    try { persisted = !!(await navigator.storage?.persisted?.()); } catch { /* ikke støttet */ }
+    $('backup-note').textContent = 'Statistikken og milepælene ligger bare i denne nettleseren' +
+      (persisted ? ', og nettleseren har lovet å ikke slette dem av seg selv. ' : '. ') +
+      'Ta en sikkerhetskopi, eller hent inn en fra en annen enhet eller nettleser.';
+  }
+
+  function backupStatus(text, error = false) {
+    const el = $('backup-status');
+    el.textContent = text;
+    el.classList.toggle('error', error);
+    el.hidden = false;
+  }
+
+  function exportBackup() {
+    const data = {};
+    try {
+      for (const k of Object.keys(localStorage)) {
+        if (DAY_KEY.test(k) || OTHER_KEYS.includes(k)) data[k] = localStorage.getItem(k);
+      }
+    } catch { backupStatus('Fikk ikke lest lagringen i nettleseren.', true); return; }
+    const todayKey = isoDate(new Date());
+    const file = JSON.stringify({ app: BACKUP_APP, version: 1, exported: todayKey, data }, null, 1);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([file], { type: 'application/json' }));
+    a.download = `a-puzzle-a-day-${todayKey}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    const days = Object.keys(data).filter(k => DAY_KEY.test(k)).length;
+    backupStatus(`✓ Sikkerhetskopi med ${days} ${days === 1 ? 'dag' : 'dager'} er lastet ned.`);
+  }
+
+  // To lagrede utgaver av samme dag: en løst dag slår en uløst, og er begge løst, gjelder den
+  // første løsningen. Er ingen løst, beholdes den lokale, men hint-telleren kan ikke gå ned.
+  function mergeDay(local, other) {
+    if (!local) return other;
+    if (!other) return local;
+    if (!!local.solvedAt !== !!other.solvedAt) return local.solvedAt ? local : other;
+    if (local.solvedAt) return other.solvedAt < local.solvedAt ? other : local;
+    return { ...local, hintsUsed: Math.max(local.hintsUsed | 0, other.hintsUsed | 0) };
+  }
+
+  function parseJson(s) {
+    try { return JSON.parse(s); } catch { return undefined; }
+  }
+
+  function importBackup(text) {
+    const backup = parseJson(text);
+    if (!backup || backup.app !== BACKUP_APP || typeof backup.data !== 'object' || !backup.data) {
+      backupStatus('Dette ser ikke ut som en sikkerhetskopi fra A-Puzzle-A-Day.', true);
+      return;
+    }
+    let added = 0, updated = 0;
+    try {
+      for (const [k, v] of Object.entries(backup.data)) {
+        if (typeof v !== 'string') continue;
+        const local = localStorage.getItem(k);
+        if (DAY_KEY.test(k)) {
+          const other = parseJson(v);
+          if (!other || typeof other !== 'object') continue;
+          const merged = mergeDay(parseJson(local) || null, other);
+          const value = JSON.stringify(merged);
+          if (local == null) added++;
+          else if (value !== local) updated++;
+          localStorage.setItem(k, value);
+        } else if (k === 'apad:seenMilestones') {
+          const seen = new Set([...(parseJson(local) || []), ...(parseJson(v) || [])]);
+          localStorage.setItem(k, JSON.stringify([...seen]));
+        } else if (OTHER_KEYS.includes(k) && local == null) {
+          localStorage.setItem(k, v); // valgt utseende o.l. overstyrer ikke det som er valgt her
+        }
+      }
+    } catch {
+      backupStatus('Fikk ikke lagret sikkerhetskopien i nettleseren.', true);
+      return;
+    }
+    // Last inn dagens brett og utseende på nytt, i tilfelle sikkerhetskopien endret dem.
+    load();
+    loadLook();
+    updateLooksBadge();
+    render();
+    evaluate();
+    renderStats();
+    persistStorage();
+    backupStatus(added || updated
+      ? `✓ Hentet inn: ${added} ${added === 1 ? 'ny' : 'nye'} og ${updated} ${updated === 1 ? 'oppdatert' : 'oppdaterte'} ${added + updated === 1 ? 'dag' : 'dager'}.`
+      : '✓ Sikkerhetskopien er hentet inn. Alt i den fantes allerede her.');
+  }
+
+  $('btn-export').addEventListener('click', exportBackup);
+  $('btn-import').addEventListener('click', () => $('import-file').click());
+  $('import-file').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    e.target.value = ''; // så samme fil kan velges igjen
+    if (file) importBackup(await file.text());
+  });
 
   // ---------- Deling ----------
   async function share(btn) {
@@ -1300,6 +1418,7 @@
   load();
   loadLook();
   updateLooksBadge();
+  if (computeStats().solved) persistStorage();
   render();
   evaluate();
   timerEl.textContent = startedAt ? formatTime((solvedAt || Date.now()) - startedAt) : '00:00';
