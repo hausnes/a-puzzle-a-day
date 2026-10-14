@@ -451,7 +451,12 @@
   }
 
   // Roter eller speilvend en brikke. `pivot` er ruta som skal bli liggende i ro.
-  function turn(p, kind, pivot = centerCell(p)) {
+  function turn(p, kind, pivot) {
+    turnPiece(p, kind, pivot);
+    noticeTurn(p, kind);
+  }
+
+  function turnPiece(p, kind, pivot = centerCell(p)) {
     const next = kind === 'rotate' ? rotated(p.orient) : flipped(p.orient);
     if (drag && drag.p === p) {
       p.orient = next;
@@ -673,6 +678,54 @@
     if (k === 'r') { e.preventDefault(); turn(target, 'rotate'); }
     else if (k === 'f') { e.preventDefault(); turn(target, 'flip'); }
   });
+
+  // ---------- Tips om speilvending ----------
+  // Mange oppdager ikke at brikkene kan speilvendes. Har du aldri gjort det og roterer samme
+  // brikke en hel runde, er det trolig speilbildet du leter etter, og da får du et tips.
+  const FLIP_KEY = 'apad:knowsFlip';
+  const isTouch = () => lastPointerType === 'touch' || matchMedia('(pointer: coarse)').matches;
+  let knowsFlip = false;
+  try { knowsFlip = localStorage.getItem(FLIP_KEY) === '1'; } catch { /* vis tipset */ }
+  let rotations = { p: null, n: 0 };
+  let flipTipShown = false;
+
+  const flipHow = () => isTouch()
+    ? 'trykk på ⇋ Speilvend for å snu brikka du sist trykket på.'
+    : 'høyreklikk på brikka, trykk F, eller bruk ⇋ Speilvend.';
+
+  function noticeTurn(p, kind) {
+    if (kind === 'flip') {
+      rotations = { p: null, n: 0 };
+      if (!knowsFlip) {
+        knowsFlip = true;
+        try { localStorage.setItem(FLIP_KEY, '1'); } catch { /* ignorer */ }
+      }
+      return;
+    }
+    rotations = rotations.p === p ? { p, n: rotations.n + 1 } : { p, n: 1 };
+    if (rotations.n === 4 && !knowsFlip && !flipTipShown) {
+      flipTipShown = true;
+      toast(`💡 Tips: brikkene kan også speilvendes! ${cap(flipHow())}`);
+      nudge($('btn-flip'));
+    }
+  }
+
+  // Tipset vises som en melding nederst på skjermen og forsvinner av seg selv.
+  const toastEl = $('toast');
+  let toastTimer = null;
+  function toast(text, ms = 7000) {
+    toastEl.textContent = text;
+    toastEl.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toastEl.hidden = true; }, ms);
+  }
+
+  function nudge(el) {
+    el.classList.remove('nudge');
+    void el.offsetWidth;
+    el.classList.add('nudge');
+    el.addEventListener('animationend', () => el.classList.remove('nudge'), { once: true });
+  }
 
   // ---------- Hint ----------
   const hintBtn = $('btn-hint');
@@ -1609,5 +1662,10 @@
   try { if (localStorage.getItem(SYNC_KEY)) loadSync().catch(() => { /* prøver igjen når statistikken åpnes */ }); } catch { /* ignorer */ }
   render();
   evaluate();
+  // Nye spillere får en kort forklaring i stedet for «0 av 8 brikker ligger på brettet».
+  if (!knowsFlip && !computeStats().played && !pieces.some(p => p.board)) {
+    toast(`👋 Dra brikkene inn på brettet. ${isTouch() ? 'Trykk' : 'Klikk'} på en brikke for å rotere den. ` +
+      `Brikkene kan også speilvendes: ${flipHow()}`, 12000);
+  }
   timerEl.textContent = startedAt ? formatTime((solvedAt || Date.now()) - startedAt) : '00:00';
 })();

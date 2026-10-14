@@ -18,6 +18,10 @@ Legg alle de åtte brikkene på brettet slik at bare **dagens måned og dato** e
 | Avbryte | `Esc` mens du drar | `Esc` |
 | Sende brikka tilbake | Slipp den utenfor brettet | `Delete` |
 
+På mobil roterer du ved å trykke på brikka, og speilvender med **⇋ Speilvend**-knappen.
+Nye spillere får et kort tips om dette. Roterer du samme brikke en hel runde uten å ha speilvendt før,
+får du et tips om speilvending, og knappen blinker.
+
 ### Hint
 
 Står du fast, kan du trykke **💡 Hint** for å få hjelp til å legge én brikke, maks tre ganger per dag.
