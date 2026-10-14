@@ -56,6 +56,13 @@ Når du låser opp noe nytt, står det i gratulasjonen, og knappen får en rød 
 Gratulasjonen viser også hvilket mål som er nærmest å bli nådd.
 Milepælene ligger i `MILESTONES` i `game.js`, og temaene ligger som `[data-theme]` i `style.css`.
 
+### Legg til på hjemskjermen
+
+Spillet kan legges til på hjemskjermen eller installeres som app, og åpnes da i eget vindu uten adresselinje:
+på iPhone via Del → «Legg til på Hjem-skjerm», på Android via menyen → «Installer app»,
+og i Chrome/Edge på PC via installer-knappen i adresselinjen.
+NB: på iPhone har hjemskjerm-appen egen lagring, så statistikk og milepæler fra Safari blir ikke med.
+
 Fremgangen lagres i nettleseren per dag. For å teste en annen dato kan du legge til `?dato=2026-12-24` i adressen.
 Dager spilt på denne måten telles ikke med i statistikken.
 
@@ -64,4 +71,5 @@ Dager spilt på denne måten telles ikke med i statistikken.
 - `index.html` – sideoppsett
 - `style.css` – utseende
 - `game.js` – brett, brikker, dra-og-slipp, tastaturstyring og sjekk av løsning
-- `favicon.svg` og `apple-touch-icon.png` – ikon for fanen og for hjemskjermen på mobil
+- `favicon.svg`, `apple-touch-icon.png` og `icon-*.png` – ikoner for fanen, hjemskjermen og installert app
+- `manifest.webmanifest` – navn, ikoner og farger når spillet legges til på hjemskjermen eller installeres

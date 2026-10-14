@@ -1090,6 +1090,9 @@
 
   function applyLook() {
     document.documentElement.dataset.theme = look.theme;
+    // Statuslinjen på mobil og vinduskanten i installert app følger bakgrunnen.
+    const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+    document.querySelector('meta[name="theme-color"]').content = bg;
     if (layout) render();
   }
 
