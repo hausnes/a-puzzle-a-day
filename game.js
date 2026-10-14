@@ -209,6 +209,20 @@
         <rect width="0.035" height="1" fill="rgba(0,0,0,0.13)"/>
         <rect x="0.06" width="0.015" height="1" fill="rgba(255,255,255,0.06)"/>
       </pattern>
+      <linearGradient id="shine-grad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#fff" stop-opacity="0.45"/>
+        <stop offset="0.5" stop-color="#fff" stop-opacity="0"/>
+        <stop offset="1" stop-color="#000" stop-opacity="0.2"/>
+      </linearGradient>
+      <pattern id="tex-shine" patternUnits="userSpaceOnUse" width="1" height="1">
+        <rect width="1" height="1" fill="url(#shine-grad)"/>
+      </pattern>
+      <pattern id="tex-speckle" patternUnits="userSpaceOnUse" width="0.5" height="0.5">
+        <circle cx="0.1" cy="0.12" r="0.025" fill="rgba(255,255,255,0.2)"/>
+        <circle cx="0.33" cy="0.3" r="0.018" fill="rgba(0,0,0,0.22)"/>
+        <circle cx="0.42" cy="0.07" r="0.012" fill="rgba(255,255,255,0.15)"/>
+        <circle cx="0.18" cy="0.42" r="0.02" fill="rgba(0,0,0,0.16)"/>
+      </pattern>
     </defs>`;
   document.body.appendChild(defs);
 
@@ -311,11 +325,13 @@
     const { w, h } = sizeOf(cells);
     const set = new Set(cells.map(([x, y]) => key(x, y)));
     const e = 0.012; // litt overlapp så det ikke blir sømmer mellom rutene
+    const skin = currentSkin();
+    const tex = textureOf(skin, p.index);
     let fill = '', grain = '', hit = '', edges = '';
     cells.forEach(([x, y], i) => {
       const r = `x="${x - e}" y="${y - e}" width="${1 + 2 * e}" height="${1 + 2 * e}"`;
-      fill += `<rect ${r} fill="${p.color}"/>`;
-      grain += `<rect ${r} fill="url(#grain-${p.grain})"/>`;
+      fill += `<rect ${r} fill="${skin.colors[p.index]}"/>`;
+      if (tex) grain += `<rect ${r} fill="url(#${tex})"/>`;
       hit += `<rect class="hit" data-i="${i}" ${r} fill="transparent"/>`;
       if (!set.has(key(x, y - 1))) edges += `M${x} ${y}H${x + 1}`;
       if (!set.has(key(x, y + 1))) edges += `M${x} ${y + 1}H${x + 1}`;
@@ -355,7 +371,7 @@
 
     for (const p of pieces) {
       const scale = pieceScale(p);
-      const svgKey = `${p.orient.rot}${p.orient.flip}${u}${scale}${hasBadge(p)}`;
+      const svgKey = `${p.orient.rot}${p.orient.flip}${u}${scale}${hasBadge(p)}${look.skin}`;
       if (p.svgKey !== svgKey) {
         p.el.innerHTML = pieceSvg(p, scale);
         p.svgKey = svgKey;
@@ -749,11 +765,12 @@
       return;
     }
     if (!solvedAt) {
+      const before = reached(computeStats()); // for å se hvilke milepæler denne løsningen ga
       solvedAt = Date.now();
       solvedHints = hintsUsed;
       if (!startedAt) startedAt = solvedAt;
       save();
-      showWin();
+      showWin(before);
     }
     say(`Løst! Brettet viser ${date.short}. Tid: ${formatTime(solvedAt - startedAt)}. ${helpText()}`, true);
   }
@@ -761,14 +778,16 @@
   // ---------- Gratulasjon ----------
   const winEl = $('win');
 
-  function showWin() {
+  function showWin(before) {
     $('win-text').textContent =
       `Du løste dagens puslespill for ${date.short} på ${formatTime(solvedAt - startedAt)}.`;
     $('win-help').textContent = helpText();
     $('win-help').classList.toggle('unaided', solvedHints === 0);
-    const { streak } = computeStats();
+    const st = computeStats();
+    const { streak } = st;
     $('win-streak').textContent = streak.current > 1 ? `🔥 ${streak.current} dager på rad!` : '';
     $('win-streak').hidden = streak.current < 2;
+    renderWinMilestones(st, before);
     openModal(winEl, $('btn-close-win'));
     confetti();
   }
@@ -787,7 +806,9 @@
     if (open) open.hidden = true; // f.eks. fra gratulasjon til statistikk
     else returnFocus = document.activeElement;
     el.hidden = false;
-    focusEl.focus();
+    // Lange dialoger skal åpne øverst, selv om fokus havner på Lukk-knappen nederst.
+    el.querySelector('.modal-card').scrollTop = 0;
+    focusEl.focus({ preventScroll: true });
   }
 
   function closeModal() {
@@ -859,6 +880,7 @@
       hints: all.reduce((sum, d) => sum + d.hints, 0),
       hintDays: all.filter(d => d.hints > 0).length,
       times,
+      bestUnaided: Math.min(...all.filter(d => d.unaided && d.time != null).map(d => d.time)),
       avg: times.length ? times.reduce((a, b) => a + b, 0) / times.length : null,
       median: times.length ? times[Math.floor((times.length - 1) / 2)] : null,
       best: times.length ? times[0] : null,
@@ -979,6 +1001,221 @@
   $('btn-share-win').addEventListener('click', e => share(e.currentTarget));
   $('btn-share-stats').addEventListener('click', e => share(e.currentTarget));
 
+  // ---------- Milepæler og utseende ----------
+  // Hver milepæl låser opp en bakgrunn eller et utseende på brikkene. Alt regnes ut fra
+  // statistikken, så dager som ble spilt før milepælene fantes, teller også.
+  const THEMES = [
+    { id: 'standard', name: 'Standard' },
+    { id: 'skog', name: 'Skog' },
+    { id: 'hav', name: 'Hav' },
+    { id: 'solnedgang', name: 'Solnedgang' },
+    { id: 'natt', name: 'Stjernenatt' },
+  ];
+
+  // Én farge per brikke, i samme rekkefølge som PIECE_DEFS.
+  const SKINS = [
+    { id: 'tre', name: 'Klassisk tre', texture: 'grain', colors: PIECE_DEFS.map(d => d.color) },
+    { id: 'bjork', name: 'Bjørk', texture: 'grain',
+      colors: ['#d9b98a', '#b98f5a', '#cfae7c', '#ead6b0', '#c4a070', '#a87d4c', '#e3c79a', '#bf9864'] },
+    { id: 'regnbue', name: 'Regnbue', texture: 'shine',
+      colors: ['#e63946', '#f4a261', '#e9c46a', '#2a9d8f', '#457b9d', '#6a4c93', '#f28482', '#90be6d'] },
+    { id: 'skifer', name: 'Skifer', texture: 'speckle',
+      colors: ['#5b6770', '#3e474f', '#6f7b84', '#8a959c', '#4a555e', '#2f373e', '#7c878e', '#56616a'] },
+    { id: 'pastell', name: 'Pastell', texture: 'shine',
+      colors: ['#f6bd60', '#f7a8b8', '#a0c4ff', '#bdb2ff', '#b9e7ae', '#ffd6a5', '#9be3ec', '#f3b8f0'] },
+    { id: 'neon', name: 'Neon', texture: 'shine',
+      colors: ['#ff2e88', '#00d9ff', '#a6f53a', '#ffd60a', '#9d4edd', '#ff6d00', '#00f5a0', '#4361ee'] },
+    { id: 'gull', name: 'Gull', texture: 'shine',
+      colors: ['#d4a017', '#b8860b', '#e6be4a', '#c99a2e', '#f0c75e', '#a67c00', '#dcb33f', '#c4911c'] },
+  ];
+
+  // `goal` er et antall som `value` skal nå; `minutes` er en tid (uten hint) som skal slås.
+  const MILESTONES = [
+    { id: 'first', text: 'Løs ditt første puslespill', skin: 'bjork', goal: 1, value: st => st.solved },
+    { id: 'unaided3', text: 'Løs 3 puslespill uten hint', theme: 'skog', goal: 3, value: st => st.unaided },
+    { id: 'solved5', text: 'Løs 5 puslespill (hint er lov)', skin: 'regnbue', goal: 5, value: st => st.solved },
+    { id: 'streak3', text: 'Løs 3 dager på rad', theme: 'hav', goal: 3, value: st => st.streak.longest },
+    { id: 'fast5', text: 'Løs uten hint på under 5 minutter', skin: 'skifer', minutes: 5 },
+    { id: 'solved10', text: 'Løs 10 puslespill', theme: 'solnedgang', goal: 10, value: st => st.solved },
+    { id: 'streak7', text: 'Løs 7 dager på rad', skin: 'pastell', goal: 7, value: st => st.streak.longest },
+    { id: 'unaided10', text: 'Løs 10 puslespill uten hint', theme: 'natt', goal: 10, value: st => st.unaided },
+    { id: 'fast2', text: 'Løs uten hint på under 2 minutter', skin: 'neon', minutes: 2 },
+    { id: 'solved30', text: 'Løs 30 puslespill', skin: 'gull', goal: 30, value: st => st.solved },
+  ];
+
+  function progress(m, st) {
+    if (m.minutes) {
+      const best = Number.isFinite(st.bestUnaided) ? st.bestUnaided : null;
+      return {
+        done: best != null && best < m.minutes * 60000,
+        ratio: best == null ? 0 : Math.min(1, m.minutes * 60000 / best),
+        text: best == null ? 'ingen løsning uten hint ennå' : `beste tid uten hint: ${formatTime(best)}`,
+      };
+    }
+    const v = Math.min(m.goal, m.value(st));
+    return { done: v >= m.goal, ratio: v / m.goal, text: `${v} av ${m.goal}` };
+  }
+
+  const reached = st => new Set(MILESTONES.filter(m => progress(m, st).done).map(m => m.id));
+  const milestoneFor = (kind, id) => MILESTONES.find(m => m[kind] === id);
+  const itemsOf = kind => (kind === 'theme' ? THEMES : SKINS);
+  const rewardName = m => m.theme
+    ? `bakgrunnen «${THEMES.find(t => t.id === m.theme).name}»`
+    : `brikkene «${SKINS.find(s => s.id === m.skin).name}»`;
+
+  function isOpen(kind, id, done) {
+    if (!itemsOf(kind).some(item => item.id === id)) return false;
+    const m = milestoneFor(kind, id);
+    return !m || done.has(m.id);
+  }
+
+  // Det valgte utseendet huskes i nettleseren.
+  const LOOK_KEY = 'apad:look';
+  let look = { theme: 'standard', skin: 'tre' };
+  const currentSkin = () => SKINS.find(s => s.id === look.skin) || SKINS[0];
+  const textureOf = (skin, i) =>
+    skin.texture === 'grain' ? `grain-${PIECE_DEFS[i].grain}` : skin.texture ? `tex-${skin.texture}` : null;
+
+  function loadLook() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(LOOK_KEY));
+      if (saved) look = { theme: saved.theme, skin: saved.skin };
+    } catch { /* standard utseende */ }
+    // Er statistikken slettet, er heller ikke det som var låst opp, tilgjengelig lenger.
+    const done = reached(computeStats());
+    if (!isOpen('theme', look.theme, done)) look.theme = 'standard';
+    if (!isOpen('skin', look.skin, done)) look.skin = 'tre';
+    applyLook();
+  }
+
+  function applyLook() {
+    document.documentElement.dataset.theme = look.theme;
+    if (layout) render();
+  }
+
+  function setLook(kind, id) {
+    look[kind] = id;
+    try { localStorage.setItem(LOOK_KEY, JSON.stringify(look)); } catch { /* ignorer */ }
+    applyLook();
+  }
+
+  // Milepæler som er nådd, men ikke sett i milepæl-vinduet ennå, gir en prikk på knappen.
+  const SEEN_KEY = 'apad:seenMilestones';
+  const looksBtn = $('btn-looks');
+
+  function seenMilestones() {
+    try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY)) || []); } catch { return new Set(); }
+  }
+
+  function updateLooksBadge(done = reached(computeStats())) {
+    const seen = seenMilestones();
+    const fresh = [...done].filter(id => !seen.has(id)).length;
+    looksBtn.classList.toggle('has-new', fresh > 0);
+    looksBtn.title = fresh ? `Du har låst opp noe nytt!` : 'Milepæler og utseende';
+  }
+
+  // Det som ligger nærmest å bli nådd.
+  function nextMilestone(st, done) {
+    let best = null, bestRatio = -1;
+    for (const m of MILESTONES) {
+      if (done.has(m.id)) continue;
+      const { ratio } = progress(m, st);
+      if (ratio > bestRatio) { best = m; bestRatio = ratio; }
+    }
+    return best;
+  }
+
+  function renderWinMilestones(st, before) {
+    const done = reached(st);
+    const fresh = MILESTONES.filter(m => done.has(m.id) && !before.has(m.id));
+    const unlockEl = $('win-unlock');
+    unlockEl.hidden = !fresh.length;
+    unlockEl.innerHTML = fresh.length
+      ? `🔓 Ny milepæl! Du har låst opp ${list(fresh.map(m => `<b>${esc(rewardName(m))}</b>`))}.<br>` +
+        '<button type="button" id="btn-win-looks">🎨 Prøv det nå</button>'
+      : '';
+    const next = nextMilestone(st, done);
+    $('win-next').hidden = !next;
+    if (next) {
+      $('win-next').textContent =
+        `Neste mål: ${next.text} (${progress(next, st).text}). Det låser opp ${rewardName(next)}.`;
+    }
+    updateLooksBadge(done);
+  }
+
+  function themePreview(t) {
+    return `<span class="theme-swatch" data-theme="${t.id}"><span class="mini-board"></span></span>`;
+  }
+
+  function skinPreview(s) {
+    let rects = '';
+    s.colors.forEach((c, i) => {
+      const r = `x="${i % 4}" y="${Math.floor(i / 4)}" width="1" height="1"`;
+      const tex = textureOf(s, i);
+      rects += `<rect ${r} fill="${c}"/>` + (tex ? `<rect ${r} fill="url(#${tex})"/>` : '');
+    });
+    return `<svg viewBox="0 0 4 2" aria-hidden="true">${rects}` +
+      '<path d="M1 0V2M2 0V2M3 0V2M0 1H4" stroke="rgba(0,0,0,0.45)" stroke-width="0.04"/></svg>';
+  }
+
+  function lookCard(kind, item, st, done, fresh) {
+    const m = milestoneFor(kind, item.id);
+    const open = !m || done.has(m.id);
+    const preview = (kind === 'theme' ? themePreview(item) : skinPreview(item)) +
+      (open ? '' : '<span class="look-lock" aria-hidden="true">🔒</span>');
+    const name = `<span class="look-name">${esc(item.name)}` +
+      (m && fresh.has(m.id) ? ' <span class="look-new">Ny!</span>' : '') + '</span>';
+    if (open) {
+      return `<button type="button" class="look" data-kind="${kind}" data-id="${item.id}" aria-pressed="${look[kind] === item.id}">
+        <span class="look-preview">${preview}</span>${name}
+        <span class="look-req">${m ? '✓ ' + esc(m.text) : 'Alltid tilgjengelig'}</span>
+      </button>`;
+    }
+    const pr = progress(m, st);
+    return `<div class="look locked">
+        <span class="look-preview">${preview}</span>${name}
+        <span class="look-req">🔒 ${esc(m.text)}</span>
+        <span class="progress" aria-hidden="true"><span style="width:${pr.ratio * 100}%"></span></span>
+        <span class="look-count">${esc(cap(pr.text))}</span>
+      </div>`;
+  }
+
+  function renderLooks(fresh) {
+    const st = computeStats();
+    const done = reached(st);
+    const cards = kind => itemsOf(kind).map(item => lookCard(kind, item, st, done, fresh)).join('');
+    $('looks-body').innerHTML = `
+      <p class="looks-summary">Du har nådd <b>${done.size} av ${MILESTONES.length}</b> milepæler.
+        Hver milepæl låser opp en ny bakgrunn eller nye brikker.</p>
+      <span class="progress total" aria-hidden="true"><span style="width:${done.size / MILESTONES.length * 100}%"></span></span>
+      <h3>Bakgrunn</h3>
+      <div class="looks">${cards('theme')}</div>
+      <h3>Brikker</h3>
+      <div class="looks">${cards('skin')}</div>
+      <p class="stats-note">Milepælene regnes ut fra statistikken i denne nettleseren.</p>`;
+  }
+
+  function showLooks() {
+    const done = reached(computeStats());
+    const seen = seenMilestones();
+    renderLooks(new Set([...done].filter(id => !seen.has(id))));
+    try { localStorage.setItem(SEEN_KEY, JSON.stringify([...done])); } catch { /* ignorer */ }
+    updateLooksBadge(done);
+    openModal($('looks'), $('btn-close-looks'));
+  }
+
+  $('looks-body').addEventListener('click', e => {
+    const btn = e.target.closest('button.look');
+    if (!btn) return;
+    const { kind, id } = btn.dataset;
+    setLook(kind, id);
+    for (const b of $('looks-body').querySelectorAll(`button.look[data-kind="${kind}"]`)) {
+      b.setAttribute('aria-pressed', b === btn);
+    }
+  });
+  looksBtn.addEventListener('click', showLooks);
+  $('win-unlock').addEventListener('click', e => { if (e.target.closest('button')) showLooks(); });
+
   function confetti() {
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const canvas = $('confetti');
@@ -1058,6 +1295,8 @@
   layout = computeLayout();
   setDate();
   load();
+  loadLook();
+  updateLooksBadge();
   render();
   evaluate();
   timerEl.textContent = startedAt ? formatTime((solvedAt || Date.now()) - startedAt) : '00:00';

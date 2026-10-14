@@ -33,6 +33,29 @@ antall hint, fordelingen av løsetider og en kalender over de siste 15 ukene.
 Alt regnes ut fra det som er lagret i nettleseren, så ingenting sendes noe sted.
 Når dagens oppgave er løst, kan du dele resultatet (delemeny på mobil, utklippstavle på PC).
 
+### Milepæler og utseende
+
+**🏅 Milepæler** viser mål du kan jobbe mot. Hver milepæl låser opp en ny bakgrunn for spillet
+eller et nytt utseende på brikkene, og du kan bytte fritt mellom det du har låst opp.
+
+| Milepæl | Låser opp |
+| --- | --- |
+| Løs ditt første puslespill | Brikker: Bjørk |
+| Løs 3 puslespill uten hint | Bakgrunn: Skog |
+| Løs 5 puslespill (hint er lov) | Brikker: Regnbue |
+| Løs 3 dager på rad | Bakgrunn: Hav |
+| Løs uten hint på under 5 minutter | Brikker: Skifer |
+| Løs 10 puslespill | Bakgrunn: Solnedgang |
+| Løs 7 dager på rad | Brikker: Pastell |
+| Løs 10 puslespill uten hint | Bakgrunn: Stjernenatt |
+| Løs uten hint på under 2 minutter | Brikker: Neon |
+| Løs 30 puslespill | Brikker: Gull |
+
+Milepælene regnes ut fra statistikken, så også dager som er spilt tidligere, teller med.
+Når du låser opp noe nytt, står det i gratulasjonen, og knappen får en rød prikk til du har sett det.
+Gratulasjonen viser også hvilket mål som er nærmest å bli nådd.
+Milepælene ligger i `MILESTONES` i `game.js`, og temaene ligger som `[data-theme]` i `style.css`.
+
 Fremgangen lagres i nettleseren per dag. For å teste en annen dato kan du legge til `?dato=2026-12-24` i adressen.
 Dager spilt på denne måten telles ikke med i statistikken.
 
