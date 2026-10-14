@@ -64,3 +64,4 @@ Dager spilt på denne måten telles ikke med i statistikken.
 - `index.html` – sideoppsett
 - `style.css` – utseende
 - `game.js` – brett, brikker, dra-og-slipp, tastaturstyring og sjekk av løsning
+- `favicon.svg` og `apple-touch-icon.png` – ikon for fanen og for hjemskjermen på mobil

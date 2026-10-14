@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Et lite brett med to brikker; de to ledige rutene er "dagens dato". -->
+  <rect width="32" height="32" rx="6" fill="#2b2522"/>
+  <rect x="4" y="4" width="24" height="24" fill="#ead6b5"/>
+  <path d="M4 4h16v8h-8v16h-8z" fill="#9a6a3e"/>
+  <path d="M28 12v16h-16v-8h8v-8z" fill="#5f3f2e"/>
+  <path d="M4 4h16v8h-8v16h-8zM28 12v16h-16v-8h8v-8z" fill="none" stroke="#2b2522" stroke-width="1"/>
+  <rect x="21.25" y="5.25" width="5.5" height="5.5" fill="none" stroke="#c0392b" stroke-width="1.5"/>
+  <rect x="13.25" y="13.25" width="5.5" height="5.5" fill="none" stroke="#c0392b" stroke-width="1.5"/>
+</svg>
