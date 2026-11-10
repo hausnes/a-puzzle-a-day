@@ -196,6 +196,21 @@
   const showGoal = $('show-goal');
   const SVG_NS = 'http://www.w3.org/2000/svg';
 
+  // Strikkemasker (4 × 5 per rute) med en hvit «lus» midt i ruta, som på en lusekofte.
+  function knitStitches() {
+    let out = '';
+    for (let row = 0; row < 5; row++) {
+      for (let col = 0; col < 4; col++) {
+        const x = col * 0.25, y = row * 0.2;
+        out += `<path d="M${x + 0.02} ${y + 0.03}Q${x + 0.05} ${y + 0.17} ${x + 0.125} ${y + 0.19}` +
+          `Q${x + 0.1} ${y + 0.05} ${x + 0.02} ${y + 0.03}ZM${x + 0.23} ${y + 0.03}` +
+          `Q${x + 0.2} ${y + 0.17} ${x + 0.125} ${y + 0.19}Q${x + 0.15} ${y + 0.05} ${x + 0.23} ${y + 0.03}Z"/>`;
+      }
+    }
+    return `<g fill="rgba(255,255,255,0.13)" stroke="rgba(0,0,0,0.22)" stroke-width="0.012">${out}</g>` +
+      '<path d="M0.5 0.4L0.6 0.5L0.5 0.6L0.4 0.5Z" fill="rgba(255,255,255,0.85)" stroke="rgba(0,0,0,0.2)" stroke-width="0.01"/>';
+  }
+
   // Felles mønster for treårer, referert fra alle brikkene.
   const defs = document.createElementNS(SVG_NS, 'svg');
   defs.setAttribute('width', '0');
@@ -225,6 +240,7 @@
         <circle cx="0.42" cy="0.07" r="0.012" fill="rgba(255,255,255,0.15)"/>
         <circle cx="0.18" cy="0.42" r="0.02" fill="rgba(0,0,0,0.16)"/>
       </pattern>
+      <pattern id="tex-knit" patternUnits="userSpaceOnUse" width="1" height="1">${knitStitches()}</pattern>
     </defs>`;
   document.body.appendChild(defs);
 
@@ -941,6 +957,9 @@
       avg: times.length ? times.reduce((a, b) => a + b, 0) / times.length : null,
       median: times.length ? times[Math.floor((times.length - 1) / 2)] : null,
       best: times.length ? times[0] : null,
+      // Desember-dager (alle år) teller mot julemilepælene.
+      december: [...days].filter(([k, d]) => d.solved && k.slice(5, 7) === '12').length,
+      decemberUnaided: [...days].filter(([k, d]) => d.unaided && k.slice(5, 7) === '12').length,
       streak: streakOf(days, todayKey, d => d.solved),
       cleanStreak: streakOf(days, todayKey, d => d.unaided),
     };
@@ -1368,6 +1387,9 @@
     { id: 'hav', name: 'Hav' },
     { id: 'solnedgang', name: 'Solnedgang' },
     { id: 'natt', name: 'Stjernenatt' },
+    { id: 'oksen', name: 'Oksen' },
+    { id: 'midtfjell', name: 'Midtfjell' },
+    { id: 'jul', name: 'Jul' },
   ];
 
   // Én farge per brikke, i samme rekkefølge som PIECE_DEFS.
@@ -1385,6 +1407,8 @@
       colors: ['#ff2e88', '#00d9ff', '#a6f53a', '#ffd60a', '#9d4edd', '#ff6d00', '#00f5a0', '#4361ee'] },
     { id: 'gull', name: 'Gull', texture: 'shine',
       colors: ['#d4a017', '#b8860b', '#e6be4a', '#c99a2e', '#f0c75e', '#a67c00', '#dcb33f', '#c4911c'] },
+    { id: 'julestrikk', name: 'Julestrikk', texture: 'knit',
+      colors: ['#c62828', '#1f6b3a', '#e9dfc8', '#d4a537', '#7b1e2b', '#5d9c59', '#22365e', '#a9433a'] },
   ];
 
   // `goal` er et antall som `value` skal nå; `minutes` er en tid (uten hint) som skal slås.
@@ -1399,7 +1423,15 @@
     { id: 'unaided10', text: 'Løs 10 puslespill uten hint', theme: 'natt', goal: 10, value: st => st.unaided },
     { id: 'fast2', text: 'Løs uten hint på under 2 minutter', skin: 'neon', minutes: 2 },
     { id: 'solved30', text: 'Løs 30 puslespill', skin: 'gull', goal: 30, value: st => st.solved },
+    { id: 'unaided50', text: 'Løs 50 puslespill uten hint', theme: 'oksen', goal: 50, value: st => st.unaided },
+    { id: 'unaided100', text: 'Løs 100 puslespill uten hint', theme: 'midtfjell', goal: 100, value: st => st.unaided },
+    // Julemilepæler: kan bare nås i desember, men det som er låst opp, beholdes resten av året.
+    { id: 'des10', text: 'Løs 10 puslespill i desember', theme: 'jul', december: true,
+      goal: 10, value: st => st.december },
+    { id: 'desUnaided10', text: 'Løs 10 puslespill uten hint i desember', skin: 'julestrikk', december: true,
+      goal: 10, value: st => st.decemberUnaided },
   ];
+  const isDecember = () => new Date().getMonth() === 11;
 
   function progress(m, st) {
     if (m.minutes) {
@@ -1479,7 +1511,7 @@
   function nextMilestone(st, done) {
     let best = null, bestRatio = -1;
     for (const m of MILESTONES) {
-      if (done.has(m.id)) continue;
+      if (done.has(m.id) || (m.december && !isDecember())) continue;
       const { ratio } = progress(m, st);
       if (ratio > bestRatio) { best = m; bestRatio = ratio; }
     }
@@ -1537,7 +1569,7 @@
         <span class="look-preview">${preview}</span>${name}
         <span class="look-req">🔒 ${esc(m.text)}</span>
         <span class="progress" aria-hidden="true"><span style="width:${pr.ratio * 100}%"></span></span>
-        <span class="look-count">${esc(cap(pr.text))}</span>
+        <span class="look-count">${esc(cap(pr.text))}${m.december && !isDecember() ? ' · 🎄 bare i desember' : ''}</span>
       </div>`;
   }
 
@@ -1553,7 +1585,9 @@
       <div class="looks">${cards('theme')}</div>
       <h3>Brikker</h3>
       <div class="looks">${cards('skin')}</div>
-      <p class="stats-note">Milepælene regnes ut fra statistikken i denne nettleseren.</p>`;
+      <p class="stats-note">Milepælene regnes ut fra statistikken i denne nettleseren.</p>
+      <p class="stats-note credits">Julebakgrunn: Image by <a href="https://pixabay.com/users/satheeshsankaran-11196627/?utm_source=link-attribution&amp;utm_medium=referral&amp;utm_campaign=image&amp;utm_content=6809681" target="_blank" rel="noopener">Satheesh Sankaran</a>
+        from <a href="https://pixabay.com//?utm_source=link-attribution&amp;utm_medium=referral&amp;utm_campaign=image&amp;utm_content=6809681" target="_blank" rel="noopener">Pixabay</a>.</p>`;
   }
 
   function showLooks() {

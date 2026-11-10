@@ -123,6 +123,93 @@
   color-scheme: dark;
 }
 
+/* Bakgrunner med foto eller mønster. --bg-size/--bg-pos styrer hvordan bildet fylles ut,
+   og --plate legger et halvgjennomsiktig felt bak teksten som ligger rett på bakgrunnen. */
+[data-theme="oksen"] {
+  --bg: #3f78b8;
+  --bg-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.35)),
+    url(bileter/oksen.jpg);
+  --bg-size: cover;
+  --bg-pos: 30% center;
+  --plate: rgba(246, 250, 253, 0.86);
+  --ink: #142333;
+  --muted: #3c5368;
+  --frame: #1c2f44;
+  --btn-bg: rgba(246, 250, 253, 0.92);
+  --btn-hover: #fff;
+  --btn-border: #8ea8c0;
+  --card: #f5f9fc;
+  --tile: #e2ecf4;
+  --cal-empty: #d3e0eb;
+  --cal-started: #a9bfd1;
+  --bar: #8ea8c0;
+  --note: #e8eff5;
+  --note-ok: #d8ece0;
+  --tray-line: rgba(255, 255, 255, 0.75);
+  --overlay: rgba(10, 24, 40, 0.5);
+}
+
+[data-theme="midtfjell"] {
+  --bg: #2d3a2a;
+  --bg-image:
+    linear-gradient(180deg, rgba(14, 20, 14, 0.25), rgba(14, 20, 14, 0.55)),
+    url(bileter/midtfjell.jpg);
+  --bg-size: cover;
+  --bg-pos: center;
+  --plate: rgba(22, 30, 22, 0.8);
+  --ink: #eef0e6;
+  --muted: #c3cbb6;
+  --frame: #2a2620;
+  --cell: #e3d3b2;
+  --btn-bg: rgba(30, 40, 30, 0.88);
+  --btn-hover: #34452f;
+  --btn-border: #5f7257;
+  --card: #1f2a1e;
+  --tile: #2b3829;
+  --cal-empty: #2f3c2d;
+  --cal-started: #4f6049;
+  --bar: #7a9070;
+  --note: #393425;
+  --note-ok: #1f3a28;
+  --ok-ink: #8fd99c;
+  --tray-line: rgba(255, 255, 255, 0.55);
+  --overlay: rgba(0, 0, 0, 0.55);
+  color-scheme: dark;
+}
+
+[data-theme="jul"] {
+  /* Mønster: Satheesh Sankaran, Pixabay (se kreditering i milepæl-vinduet). */
+  --bg: #02222c;
+  --bg-image: url(bileter/satheeshsankaran-christmas-6809681_1280.png);
+  --bg-size: 640px auto;
+  --plate: rgba(2, 28, 36, 0.88);
+  --ink: #f3efe6;
+  --muted: #b9cbcc;
+  --frame: #4a1a22;
+  --cell: #f1e4c8;
+  --cell-line: #6b4a2e;
+  --btn-bg: #0b3440;
+  --btn-hover: #11434f;
+  --btn-border: #c9a24a;
+  --card: #062b36;
+  --tile: #0d3a46;
+  --cal-empty: #10404c;
+  --cal-started: #2c5f69;
+  --bar: #c9a24a;
+  --note: #3d1d24;
+  --note-ok: #12443a;
+  --ok-ink: #8fe0a8;
+  --tray-line: rgba(243, 239, 230, 0.5);
+  --overlay: rgba(0, 10, 14, 0.6);
+  color-scheme: dark;
+}
+
+/* Forhåndsvisningene bruker små utgaver av fotoene, så milepæl-vinduet laster raskt. */
+.theme-swatch[data-theme="oksen"] { --bg-image: url(bileter/oksen-liten.jpg); }
+.theme-swatch[data-theme="midtfjell"] { --bg-image: url(bileter/midtfjell-liten.jpg); }
+.theme-swatch[data-theme="jul"] { --bg-size: 200px auto; }
+
 * { box-sizing: border-box; }
 
 body {
@@ -130,6 +217,8 @@ body {
   min-height: 100vh;
   background-color: var(--bg);
   background-image: var(--bg-image);
+  background-size: var(--bg-size, auto);
+  background-position: var(--bg-pos, 0 0);
   background-attachment: fixed;
   color: var(--ink);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -143,6 +232,8 @@ body {
   justify-content: space-between;
   gap: 8px 24px;
   padding: 12px 16px;
+  margin-bottom: 8px;
+  background: var(--plate, transparent);
 }
 
 h1 { margin: 0; font-size: 1.4rem; letter-spacing: 0.04em; }
@@ -330,16 +421,25 @@ main { padding: 0 16px 24px; }
 /* ---------- Status og hjelp ---------- */
 
 .status {
+  width: fit-content;
+  max-width: 100%;
   text-align: center;
   min-height: 1.5em;
-  margin: 12px 0;
+  margin: 12px auto;
+  padding: 2px 12px;
+  border-radius: 999px;
+  background: var(--plate, transparent);
   color: var(--muted);
 }
+.status:empty { background: none; }
 .status.solved { color: var(--ok-ink); font-weight: 600; }
 
 .help {
   max-width: 640px;
   margin: 0 auto;
+  padding: 4px 12px;
+  border-radius: 12px;
+  background: var(--plate, transparent);
   color: var(--muted);
   font-size: 0.95rem;
 }
@@ -425,6 +525,8 @@ kbd {
 }
 .modal-card .stats-empty { margin: 16px 0 24px; color: var(--muted); }
 .modal-card .stats-note { margin: 16px 0; font-size: 0.85rem; color: var(--muted); }
+.modal-card .credits { margin-top: -8px; font-size: 0.75rem; }
+.credits a { color: inherit; }
 
 .backup { margin: 20px 0; padding-top: 4px; border-top: 1px solid var(--cal-empty); }
 .backup .stats-note { margin: 0 0 12px; }
@@ -543,6 +645,8 @@ button.look:hover:not(:disabled) { background: var(--tile); border-color: var(--
   justify-content: center;
   background-color: var(--bg);
   background-image: var(--bg-image);
+  background-size: var(--bg-size, auto);
+  background-position: var(--bg-pos, 0 0);
 }
 .mini-board {
   width: 36px;

@@ -66,6 +66,14 @@ eller et nytt utseende på brikkene, og du kan bytte fritt mellom det du har lå
 | Løs 10 puslespill uten hint | Bakgrunn: Stjernenatt |
 | Løs uten hint på under 2 minutter | Brikker: Neon |
 | Løs 30 puslespill | Brikker: Gull |
+| Løs 50 puslespill uten hint | Bakgrunn: Oksen (foto) |
+| Løs 100 puslespill uten hint | Bakgrunn: Midtfjell (foto) |
+| 🎄 Løs 10 puslespill i desember | Bakgrunn: Jul |
+| 🎄 Løs 10 puslespill uten hint i desember | Brikker: Julestrikk |
+
+Julemilepælene kan bare nås i desember (dager fra alle år teller), men det som er låst opp, kan brukes hele året.
+
+Julebakgrunnen er laget av [Satheesh Sankaran](https://pixabay.com/users/satheeshsankaran-11196627/?utm_source=link-attribution&utm_medium=referral&utm_campaign=image&utm_content=6809681) fra [Pixabay](https://pixabay.com//?utm_source=link-attribution&utm_medium=referral&utm_campaign=image&utm_content=6809681).
 
 Milepælene regnes ut fra statistikken, så også dager som er spilt tidligere, teller med.
 Når du låser opp noe nytt, står det i gratulasjonen, og knappen får en rød prikk til du har sett det.
