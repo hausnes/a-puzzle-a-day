@@ -503,6 +503,17 @@ kbd {
   line-height: 1.5;
 }
 .win-unlock button { margin-top: 8px; }
+.win-intro { display: block; margin-top: 6px; font-size: 0.9rem; color: var(--muted); }
+.win-sync {
+  margin: 0 0 20px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--tile);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.win-sync .modal-actions { margin-top: 8px; }
+.win-sync .error { display: block; margin-top: 8px; color: var(--accent); }
 .modal-card .win-next { margin-top: -8px; font-size: 0.9rem; color: var(--muted); }
 .modal-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 

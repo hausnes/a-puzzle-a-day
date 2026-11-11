@@ -860,6 +860,7 @@
     $('win-streak').textContent = streak.current > 1 ? `🔥 ${streak.current} dager på rad!` : '';
     $('win-streak').hidden = streak.current < 2;
     renderWinMilestones(st, before);
+    renderWinSync(st);
     openModal(winEl, $('btn-close-win'));
     confetti();
     persistStorage();
@@ -1306,6 +1307,43 @@
     renderSync();
   }
 
+  // Påminnelse i gratulasjonen om at fremgangen bare ligger i denne nettleseren. Den vises
+  // når spilleren har noe å miste (5 løste), og én gang til ved 20, og så aldri mer.
+  const NUDGE_KEY = 'apad:syncNudge';
+  const NUDGE_AT = [5, 20];
+  const winSync = $('win-sync');
+
+  function renderWinSync(st) {
+    winSync.hidden = true;
+    let shown = 0;
+    try {
+      if (syncUser || localStorage.getItem(SYNC_KEY)) return;
+      shown = localStorage.getItem(NUDGE_KEY) | 0;
+    } catch { return; }
+    if (shown >= NUDGE_AT.length || st.solved < NUDGE_AT[shown]) return;
+    try { localStorage.setItem(NUDGE_KEY, String(shown + 1)); } catch { /* ignorer */ }
+    loadSync().catch(() => { /* knappen viser feilen */ }); // så innloggingsvinduet ikke blokkeres
+    const done = reached(st).size;
+    winSync.innerHTML = `💾 Du har løst <b>${st.solved} puslespill</b> og nådd <b>${done} ` +
+      `${done === 1 ? 'milepæl' : 'milepæler'}</b>. Alt ligger bare i denne nettleseren. ` +
+      'Logg inn med Google for å ta vare på det og spille videre på flere enheter.' +
+      '<span class="modal-actions"><button type="button" data-win-sync="in">Logg inn med Google</button>' +
+      '<button type="button" data-win-sync="later">Ikke nå</button></span>';
+    winSync.hidden = false;
+  }
+
+  winSync.addEventListener('click', async e => {
+    const action = e.target.closest('button[data-win-sync]')?.dataset.winSync;
+    if (action === 'later') winSync.hidden = true;
+    if (action !== 'in') return;
+    await signIn();
+    if (syncUser) winSync.textContent = '✓ Du er logget inn, og fremgangen din blir tatt vare på.';
+    else if (syncError) {
+      winSync.querySelector('.error')?.remove();
+      winSync.insertAdjacentHTML('beforeend', `<span class="error">${esc(syncError)}</span>`);
+    }
+  });
+
   function renderSync() {
     const body = $('sync-body');
     renderBackupNote();
@@ -1523,9 +1561,14 @@
     const fresh = MILESTONES.filter(m => done.has(m.id) && !before.has(m.id));
     const unlockEl = $('win-unlock');
     unlockEl.hidden = !fresh.length;
+    // Første løsning: fortell at det finnes mer å låse opp, ellers er det lett å overse.
+    const intro = st.solved === 1
+      ? '<span class="win-intro">Jo mer du spiller, desto flere bakgrunner og brikker låser du opp under ' +
+        '<b>🏅 Milepæler</b>, og i desember er det noen ekstra 🎄</span>'
+      : '';
     unlockEl.innerHTML = fresh.length
-      ? `🔓 Ny milepæl! Du har låst opp ${list(fresh.map(m => `<b>${esc(rewardName(m))}</b>`))}.<br>` +
-        '<button type="button" id="btn-win-looks">🎨 Prøv det nå</button>'
+      ? `🔓 Ny milepæl! Du har låst opp ${list(fresh.map(m => `<b>${esc(rewardName(m))}</b>`))}.<br>${intro}` +
+        `<button type="button" id="btn-win-looks">${intro ? '🎨 Se milepælene' : '🎨 Prøv det nå'}</button>`
       : '';
     const next = nextMilestone(st, done);
     $('win-next').hidden = !next;
