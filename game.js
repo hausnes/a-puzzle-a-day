@@ -843,6 +843,7 @@
       save();
       showWin(before);
       syncNow();
+      window.track?.('puzzle_solved', { hints: solvedHints, seconds: Math.round((solvedAt - startedAt) / 1000) });
     }
     say(`Løst! Brettet viser ${date.short}. Tid: ${formatTime(solvedAt - startedAt)}. ${helpText()}`, true);
   }

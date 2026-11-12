@@ -298,6 +298,29 @@ button:focus-visible { outline: 3px solid var(--select); outline-offset: 2px; }
 }
 .toast[hidden] { display: none; }
 
+.consent {
+  position: fixed;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(560px, calc(100% - 32px));
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--btn-border);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  z-index: 950;
+  animation: fade 0.25s ease;
+}
+.consent[hidden] { display: none; }
+.consent p { margin: 0 0 10px; }
+.consent-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.privacy-note { font-size: 0.85rem; color: var(--muted); }
+.privacy-note button { margin-left: 4px; padding: 2px 8px; font-size: 0.85rem; }
+
 /* Får øye på knappen når spilleren ser ut til å lete etter den. */
 .nudge { animation: nudge 0.8s ease-in-out 4; }
 @keyframes nudge {

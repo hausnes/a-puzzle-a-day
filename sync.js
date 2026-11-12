@@ -10,7 +10,7 @@ import {
 import { getFirestore, doc, getDoc, setDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js';
 
 // Denne er ikke hemmelig: den sier bare hvilket Firebase-prosjekt spillet hører til.
-// Google Analytics (measurementId) startes ikke før vi har et samtykkebanner.
+// Google Analytics startes i analytics.js, og bare etter samtykke – ikke herfra.
 const firebaseConfig = {
   apiKey: 'AIzaSyCoE8KyYbBRGzSIMbwKeOgggbOkRQOwiDQ',
   authDomain: 'a-puzzle-a-day-7067f.firebaseapp.com',
