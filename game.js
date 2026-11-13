@@ -1710,7 +1710,9 @@
 
   function setDate() {
     $('goal-text').textContent = date.text;
-    document.title = `A-Puzzle-A-Day – ${date.short}`;
+    // Datoen først, så den synes i fanen. Resten er lik den faste tittelen i index.html,
+    // som er den Google bør vise i søkeresultatene.
+    document.title = `${date.short} · A-Puzzle-A-Day – daglig kalenderpuslespill`;
   }
 
   // Ny dag (f.eks. hvis siden står åpen over midnatt): last inn den nye dagens brett.
