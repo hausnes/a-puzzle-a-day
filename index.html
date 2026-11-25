@@ -75,6 +75,7 @@
       <p id="win-text"></p>
       <p id="win-help" class="win-help"></p>
       <p id="win-streak" class="win-streak" hidden></p>
+      <p id="win-fact" class="win-fact"></p>
       <div id="win-unlock" class="win-unlock" hidden></div>
       <p id="win-next" class="win-next" hidden></p>
       <div id="win-sync" class="win-sync" hidden></div>
@@ -117,6 +118,21 @@
       <div id="looks-body"></div>
       <div class="modal-actions">
         <button type="button" id="btn-close-looks" class="btn-close-modal">Lukk</button>
+      </div>
+    </div>
+  </div>
+  <div id="facts" class="modal" hidden>
+    <div class="modal-card facts-card" role="dialog" aria-modal="true" aria-labelledby="facts-title">
+      <h2 id="facts-title">Løsninger per dato</h2>
+      <p class="stats-note">Alle de 366 datoene kan løses, men noen har langt flere løsninger enn andre.
+        Trykk på bildet for å se det i full størrelse.</p>
+      <a href="bileter/loysingar.jpg" target="_blank" rel="noopener">
+        <img src="bileter/loysingar.jpg" width="1724" height="2047" loading="lazy" class="facts-img"
+          alt="Oversikt over hvor mange løsninger hver dato har: et rutenett med alle datoene i året, de ti vanskeligste og de ti letteste datoene, fordelingen av antall løsninger, og eksempelløsninger. Totalt 24 405 løsninger, 67 per dato i snitt. 6. oktober er vanskeligst med 7 løsninger, 25. januar lettest med 216.">
+      </a>
+      <p class="stats-note credits">Laget av Truls Henrik Jakobsen.</p>
+      <div class="modal-actions">
+        <button type="button" id="btn-close-facts" class="btn-close-modal">Lukk</button>
       </div>
     </div>
   </div>

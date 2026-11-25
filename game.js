@@ -860,12 +860,59 @@
     const { streak } = st;
     $('win-streak').textContent = streak.current > 1 ? `🔥 ${streak.current} dager på rad!` : '';
     $('win-streak').hidden = streak.current < 2;
+    renderWinFact();
     renderWinMilestones(st, before);
     renderWinSync(st);
     openModal(winEl, $('btn-close-win'));
     confetti();
     persistStorage();
   }
+
+  // ---------- Fun fact: antall løsninger per dato ----------
+  // Regnet ut med samme løser som hintene (alle 366 datoer, 24 405 løsninger totalt).
+  // Stemmer med oversikten Truls Henrik Jakobsen har laget (bileter/loysingar.jpg).
+  const SOLUTION_COUNTS = [
+    [64, 109, 47, 103, 83, 24, 188, 79, 127, 77, 74, 60, 129, 88, 87, 70, 133, 69, 104, 195, 104, 78, 188, 48, 216, 84, 85, 145, 74, 119, 170],
+    [73, 45, 22, 41, 49, 27, 88, 48, 32, 47, 26, 31, 59, 31, 28, 26, 55, 35, 45, 67, 29, 25, 81, 21, 78, 63, 47, 81, 64],
+    [17, 24, 39, 57, 32, 16, 86, 66, 71, 27, 40, 40, 53, 44, 39, 30, 60, 22, 52, 61, 29, 29, 92, 24, 61, 72, 49, 80, 49, 18, 107],
+    [55, 49, 78, 56, 63, 8, 104, 111, 52, 88, 68, 47, 63, 62, 59, 61, 62, 41, 52, 123, 76, 49, 145, 26, 116, 81, 68, 140, 84, 52],
+    [57, 62, 32, 47, 56, 23, 116, 42, 33, 48, 51, 23, 77, 53, 56, 43, 67, 36, 46, 62, 36, 16, 87, 14, 101, 53, 47, 130, 66, 79, 87],
+    [56, 49, 54, 48, 50, 24, 191, 85, 52, 44, 78, 45, 44, 61, 57, 38, 75, 42, 86, 114, 57, 35, 102, 31, 150, 73, 73, 163, 57, 39],
+    [99, 19, 27, 70, 34, 12, 125, 63, 72, 40, 43, 37, 70, 48, 28, 40, 109, 43, 61, 108, 52, 24, 78, 22, 97, 38, 68, 133, 42, 51, 82],
+    [68, 85, 40, 94, 76, 44, 172, 105, 88, 87, 57, 59, 120, 70, 72, 85, 107, 65, 100, 116, 53, 41, 129, 24, 161, 84, 111, 189, 82, 78, 151],
+    [34, 18, 49, 38, 25, 27, 92, 50, 43, 51, 36, 20, 46, 21, 58, 42, 52, 34, 33, 70, 38, 29, 85, 24, 54, 48, 39, 78, 48, 36],
+    [58, 34, 28, 59, 13, 7, 92, 50, 36, 59, 28, 16, 52, 54, 43, 26, 48, 26, 50, 67, 25, 27, 87, 22, 85, 36, 29, 95, 56, 29, 106],
+    [82, 91, 75, 68, 178, 33, 179, 108, 72, 97, 102, 92, 78, 76, 67, 64, 115, 81, 82, 164, 104, 40, 101, 35, 155, 106, 86, 183, 85, 74],
+    [26, 32, 67, 45, 32, 66, 125, 67, 73, 66, 44, 78, 99, 39, 81, 68, 82, 38, 59, 103, 44, 49, 115, 30, 92, 48, 71, 164, 54, 60, 77],
+  ];
+  const ALL_COUNTS = SOLUTION_COUNTS.flat();
+  const AVG_SOLUTIONS = Math.round(ALL_COUNTS.reduce((a, b) => a + b, 0) / ALL_COUNTS.length);
+
+  function winFactText() {
+    const n = SOLUTION_COUNTS[date.month]?.[date.day - 1];
+    if (!n) return null;
+    const fewer = ALL_COUNTS.filter(c => c < n).length; // datoer som er vanskeligere
+    const more = ALL_COUNTS.filter(c => c > n).length;  // datoer som er lettere
+    const sol = `<b>${n} mulige ${n === 1 ? 'løsning' : 'løsninger'}</b>`;
+    if (fewer === 0) return `🧩 ${date.short} har bare ${sol} – den vanskeligste datoen i hele året!`;
+    if (more === 0) return `🧩 ${date.short} har hele ${sol} – flest av alle datoene i året.`;
+    if (fewer < 10) return `🧩 ${date.short} har bare ${sol}. Det er en av de ti vanskeligste datoene i året!`;
+    if (more < 10) return `🧩 ${date.short} har hele ${sol}. Det er en av de ti letteste datoene i året.`;
+    return `🧩 Visste du at ${date.short} har ${sol}? Snittet er ${AVG_SOLUTIONS}.`;
+  }
+
+  function renderWinFact() {
+    const el = $('win-fact');
+    const text = winFactText();
+    el.hidden = !text;
+    if (text) el.innerHTML = `${text} <button type="button" class="link-btn" data-facts>Se alle datoene</button>`;
+  }
+
+  function showFacts() {
+    openModal($('facts'), $('btn-close-facts'));
+    window.track?.('facts_opened');
+  }
+  $('win-fact').addEventListener('click', e => { if (e.target.closest('[data-facts]')) showFacts(); });
 
   function helpText() {
     if (solvedHints === 0) return 'Helt uten hjelp! 🏆';
